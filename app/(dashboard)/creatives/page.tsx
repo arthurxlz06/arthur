@@ -644,53 +644,113 @@ function CsvImportModal({
   )
 }
 
-// ─── Filter Input ─────────────────────────────────────────────────────────────
+// ─── Filter Row ───────────────────────────────────────────────────────────────
 
-function FilterInput({
+function FilterRow({
   label,
   minKey,
   maxKey,
   filters,
   onChange,
+  placeholder = '',
 }: {
   label: string
   minKey: keyof Filters
   maxKey: keyof Filters
   filters: Filters
   onChange: (k: keyof Filters, v: string) => void
+  placeholder?: string
 }) {
+  const active = filters[minKey] !== '' || filters[maxKey] !== ''
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '130px' }}>
-      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>{label}</span>
-      <div style={{ display: 'flex', gap: '4px' }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '110px 1fr 1fr',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '8px 12px',
+        borderRadius: 'var(--radius-sm)',
+        background: active ? 'rgba(91,110,245,0.05)' : 'transparent',
+        border: `1px solid ${active ? 'rgba(91,110,245,0.2)' : 'transparent'}`,
+        transition: 'all 150ms ease',
+      }}
+    >
+      <span style={{
+        fontSize: '12px',
+        fontWeight: '500',
+        color: active ? 'var(--accent)' : 'var(--text-secondary)',
+      }}>
+        {label}
+      </span>
+      <div style={{ position: 'relative' }}>
+        <span style={rangeSymbolStyle}>≥</span>
         <input
           type="number"
-          placeholder="Min"
+          placeholder={`Mínimo${placeholder ? ` ${placeholder}` : ''}`}
           value={filters[minKey]}
           onChange={(e) => onChange(minKey, e.target.value)}
-          style={filterInputStyle}
+          style={rangeInputStyle}
         />
+        {filters[minKey] !== '' && (
+          <button onClick={() => onChange(minKey, '')} style={clearBtnStyle}>
+            <X size={10} />
+          </button>
+        )}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <span style={rangeSymbolStyle}>≤</span>
         <input
           type="number"
-          placeholder="Max"
+          placeholder={`Máximo${placeholder ? ` ${placeholder}` : ''}`}
           value={filters[maxKey]}
           onChange={(e) => onChange(maxKey, e.target.value)}
-          style={filterInputStyle}
+          style={rangeInputStyle}
         />
+        {filters[maxKey] !== '' && (
+          <button onClick={() => onChange(maxKey, '')} style={clearBtnStyle}>
+            <X size={10} />
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-const filterInputStyle: React.CSSProperties = {
-  width: '58px',
-  padding: '5px 6px',
-  fontSize: '11px',
-  borderRadius: '4px',
+const rangeInputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '7px 28px 7px 26px',
+  fontSize: '13px',
+  borderRadius: 'var(--radius-sm)',
   border: '1px solid var(--bg-border)',
   background: 'var(--bg-elevated)',
   color: 'var(--text-primary)',
   outline: 'none',
+  boxSizing: 'border-box',
+}
+
+const rangeSymbolStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: '9px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  fontSize: '13px',
+  color: 'var(--text-muted)',
+  pointerEvents: 'none',
+  userSelect: 'none',
+}
+
+const clearBtnStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: '7px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'var(--text-muted)',
+  display: 'flex',
+  padding: '2px',
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -1161,20 +1221,43 @@ export default function CreativesPage() {
         </button>
       </div>
 
-      {/* Sort + Filter bar */}
+      {/* Search + Sort + Filter bar */}
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-border)',
+          borderRadius: 'var(--radius-md)',
           marginBottom: '12px',
-          flexWrap: 'wrap',
+          overflow: 'hidden',
         }}
       >
-        {/* Sort */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {/* Search row */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bg-border)', gap: '8px' }}>
+          <Filter size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+          <input
+            type="text"
+            placeholder="Buscar por nome do criativo..."
+            value={filters.search}
+            onChange={(e) => setFilter('search', e.target.value)}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontSize: '14px',
+              color: 'var(--text-primary)',
+            }}
+          />
+          {filters.search && (
+            <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Controls row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', flexWrap: 'wrap' }}>
           <ArrowUpDown size={13} color="var(--text-muted)" />
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Ordenar:</span>
           <select
             value={sortField}
             onChange={(e) => setSortField(e.target.value as SortField)}
@@ -1187,85 +1270,55 @@ export default function CreativesPage() {
           <button
             onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 10px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--bg-border)',
-              background: 'var(--bg-surface)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontSize: '12px',
+              display: 'flex', alignItems: 'center', gap: '4px',
+              padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--bg-border)', background: 'transparent',
+              color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px',
             }}
           >
             {sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
             {sortDir === 'desc' ? 'Decrescente' : 'Crescente'}
           </button>
-        </div>
 
-        {/* Search */}
-        <input
-          type="text"
-          placeholder="Buscar por nome..."
-          value={filters.search}
-          onChange={(e) => setFilter('search', e.target.value)}
-          style={{ ...inputStyle, width: '200px' }}
-        />
-
-        {/* Filter toggle */}
-        <button
-          onClick={() => setShowFilters((v) => !v)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            padding: '5px 10px',
-            borderRadius: 'var(--radius-sm)',
-            border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`,
-            background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'var(--bg-surface)',
-            color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '12px',
-          }}
-        >
-          <Filter size={12} />
-          Filtros
-          {activeFiltersCount > 0 && (
-            <span
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={() => setFilters(DEFAULT_FILTERS)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--bg-border)', background: 'transparent',
+                  color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px',
+                }}
+              >
+                <X size={11} /> Limpar filtros
+              </button>
+            )}
+            <button
+              onClick={() => setShowFilters((v) => !v)}
               style={{
-                background: 'var(--accent)',
-                color: 'white',
-                borderRadius: '10px',
-                padding: '0 5px',
-                fontSize: '10px',
-                fontWeight: '600',
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`,
+                background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'transparent',
+                color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)',
+                cursor: 'pointer', fontSize: '12px', fontWeight: activeFiltersCount > 0 ? '500' : '400',
               }}
             >
-              {activeFiltersCount}
-            </span>
-          )}
-        </button>
-
-        {activeFiltersCount > 0 && (
-          <button
-            onClick={() => setFilters(DEFAULT_FILTERS)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 10px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--bg-border)',
-              background: 'transparent',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: '12px',
-            }}
-          >
-            <X size={11} /> Limpar filtros
-          </button>
-        )}
+              <Filter size={12} />
+              {showFilters ? 'Fechar filtros' : 'Filtros'}
+              {activeFiltersCount > 0 && (
+                <span style={{
+                  background: 'var(--accent)', color: 'white',
+                  borderRadius: '10px', padding: '1px 6px',
+                  fontSize: '10px', fontWeight: '600',
+                }}>
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Filter panel */}
@@ -1275,35 +1328,31 @@ export default function CreativesPage() {
             background: 'var(--bg-surface)',
             border: '1px solid var(--bg-border)',
             borderRadius: 'var(--radius-md)',
-            padding: '16px',
+            padding: '8px',
             marginBottom: '12px',
           }}
         >
-          {/* Filter inputs */}
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '14px' }}>
-            <FilterInput label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
-            <FilterInput label="Gasto (R$)" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} />
-            <FilterInput label="Receita (R$)" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} />
-            <FilterInput label="CPA (R$)" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} />
-            <FilterInput label="CTR (%)" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} />
-            <FilterInput label="Hook Rate (%)" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} />
+          {/* Filter rows */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <FilterRow label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
+            <FilterRow label="Gasto" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} placeholder="R$" />
+            <FilterRow label="Receita" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} placeholder="R$" />
+            <FilterRow label="CPA" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} placeholder="R$" />
+            <FilterRow label="CTR" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} placeholder="%" />
+            <FilterRow label="Hook Rate" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} placeholder="%" />
           </div>
 
           {/* Saved filter sets */}
-          <div style={{ borderTop: '1px solid var(--bg-border)', paddingTop: '12px' }}>
+          <div style={{ borderTop: '1px solid var(--bg-border)', marginTop: '8px', paddingTop: '12px', padding: '12px 12px 4px' }}>
             {savedFilterSets.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                 {savedFilterSets.map((set) => (
                   <div
                     key={set.name}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px 3px 10px',
-                      borderRadius: '20px',
-                      border: '1px solid var(--bg-border)',
-                      background: 'var(--bg-elevated)',
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                      padding: '3px 8px 3px 10px', borderRadius: '20px',
+                      border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)',
                       fontSize: '12px',
                     }}
                   >
@@ -1316,7 +1365,6 @@ export default function CreativesPage() {
                     <button
                       onClick={() => handleDeleteFilterSet(set.name)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '1px' }}
-                      title="Excluir filtro salvo"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -1338,7 +1386,7 @@ export default function CreativesPage() {
                     if (e.key === 'Enter') handleSaveFilterSet()
                     if (e.key === 'Escape') { setShowSaveInput(false); setSaveFilterName('') }
                   }}
-                  style={{ ...filterInputStyle, width: '180px', fontSize: '12px', padding: '5px 10px' }}
+                  style={{ ...rangeInputStyle, width: '180px', paddingLeft: '10px' }}
                 />
                 <button
                   onClick={handleSaveFilterSet}
