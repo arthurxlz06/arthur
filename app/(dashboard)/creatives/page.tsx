@@ -44,12 +44,7 @@ interface AdMetrics {
   conv_rate: number
   video_3s: number
   video_15s: number
-  video_25pct: number
   video_30s: number
-  video_50pct: number
-  video_75pct: number
-  video_95pct: number
-  video_100pct: number
 }
 
 interface CreativeLink {
@@ -274,12 +269,7 @@ function CreativeCard({
             <div style={{ borderTop: '1px solid var(--bg-border)', margin: '6px 0' }} />
             <MetricRow label="3S VV" value={fmtInt(creative.video_3s)} />
             <MetricRow label="15S VV" value={fmtInt(creative.video_15s)} />
-            <MetricRow label="25% VV" value={fmtInt(creative.video_25pct)} />
             <MetricRow label="30S VV" value={fmtInt(creative.video_30s)} />
-            <MetricRow label="50% VV" value={fmtInt(creative.video_50pct)} />
-            <MetricRow label="75% VV" value={fmtInt(creative.video_75pct)} />
-            <MetricRow label="95% VV" value={fmtInt(creative.video_95pct)} />
-            <MetricRow label="100% VV" value={fmtInt(creative.video_100pct)} />
           </div>
         )}
 

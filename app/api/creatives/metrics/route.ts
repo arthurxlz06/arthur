@@ -18,14 +18,8 @@ interface InsightRecord {
   actions?: MetaAction[]
   action_values?: MetaAction[]
   video_play_actions?: MetaAction[]
-  video_p25_watched_actions?: MetaAction[]
-  video_p50_watched_actions?: MetaAction[]
-  video_p75_watched_actions?: MetaAction[]
-  video_p95_watched_actions?: MetaAction[]
-  video_p100_watched_actions?: MetaAction[]
   video_30_sec_watched_actions?: MetaAction[]
   video_thruplay_watched_actions?: MetaAction[]
-  outbound_clicks?: MetaAction[]
 }
 
 interface InsightsPagedResponse {
@@ -69,14 +63,8 @@ export async function GET(req: Request) {
     'actions',
     'action_values',
     'video_play_actions',
-    'video_p25_watched_actions',
-    'video_p50_watched_actions',
-    'video_p75_watched_actions',
-    'video_p95_watched_actions',
-    'video_p100_watched_actions',
     'video_30_sec_watched_actions',
     'video_thruplay_watched_actions',
-    'outbound_clicks',
   ].join(',')
 
   const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
@@ -121,14 +109,9 @@ export async function GET(req: Request) {
     const purchases      = getAction(r.actions, 'purchase') || getAction(r.actions, 'omni_purchase')
     const revenue        = getAction(r.action_values, 'purchase') || getAction(r.action_values, 'omni_purchase')
 
-    const video3s    = getVideoField(r.video_play_actions)
-    const video15s   = getVideoField(r.video_thruplay_watched_actions)
-    const video25pct = getVideoField(r.video_p25_watched_actions)
-    const video30s   = getVideoField(r.video_30_sec_watched_actions)
-    const video50pct = getVideoField(r.video_p50_watched_actions)
-    const video75pct = getVideoField(r.video_p75_watched_actions)
-    const video95pct = getVideoField(r.video_p95_watched_actions)
-    const video100pct = getVideoField(r.video_p100_watched_actions)
+    const video3s  = getVideoField(r.video_play_actions)
+    const video15s = getVideoField(r.video_thruplay_watched_actions)
+    const video30s = getVideoField(r.video_30_sec_watched_actions)
 
     const hookRate  = impressions > 0 ? (video3s / impressions) * 100 : 0
     const bodyRate  = video3s > 0 ? (video15s / video3s) * 100 : 0
@@ -158,14 +141,9 @@ export async function GET(req: Request) {
       roas,
       avg_ticket:   avgTicket,
       conv_rate:    convRate,
-      video_3s:     video3s,
-      video_15s:    video15s,
-      video_25pct:  video25pct,
-      video_30s:    video30s,
-      video_50pct:  video50pct,
-      video_75pct:  video75pct,
-      video_95pct:  video95pct,
-      video_100pct: video100pct,
+      video_3s:  video3s,
+      video_15s: video15s,
+      video_30s: video30s,
     }
   })
 
@@ -188,14 +166,9 @@ export async function GET(req: Request) {
     existing.video_views  += ad.video_views
     existing.purchases    += ad.purchases
     existing.revenue      += ad.revenue
-    existing.video_3s     += ad.video_3s
-    existing.video_15s    += ad.video_15s
-    existing.video_25pct  += ad.video_25pct
-    existing.video_30s    += ad.video_30s
-    existing.video_50pct  += ad.video_50pct
-    existing.video_75pct  += ad.video_75pct
-    existing.video_95pct  += ad.video_95pct
-    existing.video_100pct += ad.video_100pct
+    existing.video_3s  += ad.video_3s
+    existing.video_15s += ad.video_15s
+    existing.video_30s += ad.video_30s
   }
 
   // Recalcula taxas a partir dos totais
