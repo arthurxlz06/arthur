@@ -11,6 +11,8 @@ import {
   Upload,
   ArrowUpDown,
   Filter,
+  Bookmark,
+  Trash2,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -706,6 +708,15 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: 'impressions', label: 'Impressões' },
 ]
 
+interface SavedFilterSet {
+  name: string
+  filters: Filters
+  sortField: SortField
+  sortDir: SortDir
+}
+
+const LS_KEY = 'creatives_saved_filters'
+
 const DEFAULT_FILTERS: Filters = {
   search: '',
   roas_min: '', roas_max: '',
@@ -736,8 +747,45 @@ export default function CreativesPage() {
   const [sortField, setSortField] = useState<SortField>('roas')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
+  const [savedFilterSets, setSavedFilterSets] = useState<SavedFilterSet[]>([])
+  const [saveFilterName, setSaveFilterName] = useState('')
+  const [showSaveInput, setShowSaveInput] = useState(false)
+
   const [linkModal, setLinkModal] = useState<string | null>(null)
   const [showCsvModal, setShowCsvModal] = useState(false)
+
+  // Load saved filters from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY)
+      if (raw) setSavedFilterSets(JSON.parse(raw) as SavedFilterSet[])
+    } catch {}
+  }, [])
+
+  const persistSavedSets = (sets: SavedFilterSet[]) => {
+    setSavedFilterSets(sets)
+    localStorage.setItem(LS_KEY, JSON.stringify(sets))
+  }
+
+  const handleSaveFilterSet = () => {
+    const name = saveFilterName.trim()
+    if (!name) return
+    const newSet: SavedFilterSet = { name, filters, sortField, sortDir }
+    const updated = [...savedFilterSets.filter((s) => s.name !== name), newSet]
+    persistSavedSets(updated)
+    setSaveFilterName('')
+    setShowSaveInput(false)
+  }
+
+  const handleApplyFilterSet = (set: SavedFilterSet) => {
+    setFilters(set.filters)
+    setSortField(set.sortField)
+    setSortDir(set.sortDir)
+  }
+
+  const handleDeleteFilterSet = (name: string) => {
+    persistSavedSets(savedFilterSets.filter((s) => s.name !== name))
+  }
 
   // Load selected ad accounts
   useEffect(() => {
@@ -1072,17 +1120,103 @@ export default function CreativesPage() {
             borderRadius: 'var(--radius-md)',
             padding: '16px',
             marginBottom: '12px',
-            display: 'flex',
-            gap: '16px',
-            flexWrap: 'wrap',
           }}
         >
-          <FilterInput label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
-          <FilterInput label="Gasto (R$)" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} />
-          <FilterInput label="Receita (R$)" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} />
-          <FilterInput label="CPA (R$)" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} />
-          <FilterInput label="CTR (%)" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} />
-          <FilterInput label="Hook Rate (%)" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} />
+          {/* Filter inputs */}
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '14px' }}>
+            <FilterInput label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
+            <FilterInput label="Gasto (R$)" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} />
+            <FilterInput label="Receita (R$)" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} />
+            <FilterInput label="CPA (R$)" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} />
+            <FilterInput label="CTR (%)" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} />
+            <FilterInput label="Hook Rate (%)" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} />
+          </div>
+
+          {/* Saved filter sets */}
+          <div style={{ borderTop: '1px solid var(--bg-border)', paddingTop: '12px' }}>
+            {savedFilterSets.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                {savedFilterSets.map((set) => (
+                  <div
+                    key={set.name}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px 3px 10px',
+                      borderRadius: '20px',
+                      border: '1px solid var(--bg-border)',
+                      background: 'var(--bg-elevated)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <button
+                      onClick={() => handleApplyFilterSet(set)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '12px', padding: 0 }}
+                    >
+                      {set.name}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFilterSet(set.name)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '1px' }}
+                      title="Excluir filtro salvo"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Save current filters */}
+            {showSaveInput ? (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Nome do filtro..."
+                  value={saveFilterName}
+                  onChange={(e) => setSaveFilterName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveFilterSet()
+                    if (e.key === 'Escape') { setShowSaveInput(false); setSaveFilterName('') }
+                  }}
+                  style={{ ...filterInputStyle, width: '180px', fontSize: '12px', padding: '5px 10px' }}
+                />
+                <button
+                  onClick={handleSaveFilterSet}
+                  disabled={!saveFilterName.trim()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                    border: 'none', background: 'var(--accent)', color: 'white',
+                    cursor: saveFilterName.trim() ? 'pointer' : 'not-allowed',
+                    fontSize: '12px', opacity: saveFilterName.trim() ? 1 : 0.5,
+                  }}
+                >
+                  <Check size={12} /> Salvar
+                </button>
+                <button
+                  onClick={() => { setShowSaveInput(false); setSaveFilterName('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSaveInput(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--bg-border)', background: 'transparent',
+                  color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px',
+                }}
+              >
+                <Bookmark size={12} /> Salvar filtros atuais
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -82,7 +82,6 @@ export async function GET(req: Request) {
     'video_p100_watched_actions',
     'video_30_sec_watched_actions',
     'video_avg_time_watched_actions',
-    'landing_page_view_rate',
     'outbound_clicks',
   ].join(',')
 
