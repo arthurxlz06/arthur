@@ -7,7 +7,9 @@ interface MetaAction {
   value: string
 }
 
-interface MetaInsights {
+interface InsightRecord {
+  ad_id: string
+  ad_name: string
   spend?: string
   clicks?: string
   impressions?: string
@@ -15,7 +17,6 @@ interface MetaInsights {
   cpm?: string
   actions?: MetaAction[]
   action_values?: MetaAction[]
-  cost_per_action_type?: MetaAction[]
   video_play_actions?: MetaAction[]
   video_p25_watched_actions?: MetaAction[]
   video_p50_watched_actions?: MetaAction[]
@@ -25,17 +26,10 @@ interface MetaInsights {
   video_30_sec_watched_actions?: MetaAction[]
   video_thruplay_watched_actions?: MetaAction[]
   outbound_clicks?: MetaAction[]
-  website_ctr?: MetaAction[]
 }
 
-interface MetaAd {
-  id: string
-  name: string
-  insights?: { data?: MetaInsights[] }
-}
-
-interface MetaPagedResponse {
-  data?: MetaAd[]
+interface InsightsPagedResponse {
+  data?: InsightRecord[]
   paging?: { next?: string }
   error?: { message: string }
 }
@@ -65,6 +59,8 @@ export async function GET(req: Request) {
   }
 
   const fields = [
+    'ad_id',
+    'ad_name',
     'spend',
     'clicks',
     'impressions',
@@ -72,7 +68,6 @@ export async function GET(req: Request) {
     'cpm',
     'actions',
     'action_values',
-    'cost_per_action_type',
     'video_play_actions',
     'video_p25_watched_actions',
     'video_p50_watched_actions',
@@ -82,89 +77,73 @@ export async function GET(req: Request) {
     'video_30_sec_watched_actions',
     'video_thruplay_watched_actions',
     'outbound_clicks',
-    'website_ctr',
   ].join(',')
 
-  // Busca todas as páginas — sem filtro de status para incluir todos os criativos do período
-  const allAds: MetaAd[] = []
+  const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
+
+  // Insights API com level=ad — retorna todos os ads que tiveram gasto no período
+  const allRecords: InsightRecord[] = []
   let nextUrl: string | undefined =
-    `https://graph.facebook.com/${process.env.META_API_VERSION}/${accountId}/ads` +
-    `?fields=id,name,insights.time_range({"since":"${since}","until":"${until}"}){${fields}}` +
+    `https://graph.facebook.com/${process.env.META_API_VERSION}/${accountId}/insights` +
+    `?level=ad` +
+    `&fields=${fields}` +
+    `&time_range=${timeRange}` +
     `&access_token=${user.facebook_access_token}` +
     `&limit=500`
 
   while (nextUrl) {
     const res = await fetch(nextUrl)
-    const page = await res.json() as MetaPagedResponse
+    const page = await res.json() as InsightsPagedResponse
 
     if (page.error) {
       return NextResponse.json({ error: page.error.message }, { status: 500 })
     }
 
-    allAds.push(...(page.data ?? []))
+    allRecords.push(...(page.data ?? []))
     nextUrl = page.paging?.next
   }
 
-  const getAction = (arr: MetaAction[], type: string) =>
-    parseFloat(arr.find((a) => a.action_type === type)?.value ?? '0')
-
-  const getActionValue = (arr: MetaAction[], type: string) =>
-    parseFloat(arr.find((a) => a.action_type === type)?.value ?? '0')
+  const getAction = (arr: MetaAction[] | undefined, type: string) =>
+    parseFloat(arr?.find((a) => a.action_type === type)?.value ?? '0')
 
   const getVideoField = (arr: MetaAction[] | undefined, type = 'video_view') =>
     parseFloat(arr?.find((a) => a.action_type === type)?.value ?? '0')
 
-  // Deduplica por ad_id
-  const seenIds = new Set<string>()
-  const uniqueAds = allAds.filter((ad) => {
-    if (seenIds.has(ad.id)) return false
-    seenIds.add(ad.id)
-    return true
-  })
+  const ads = allRecords.map((r) => {
+    const spend       = parseFloat(r.spend ?? '0')
+    const impressions = parseInt(r.impressions ?? '0')
+    const clicks      = parseInt(r.clicks ?? '0')
+    const ctr         = parseFloat(r.ctr ?? '0')
+    const cpm         = parseFloat(r.cpm ?? '0')
 
-  const ads = uniqueAds.map((ad) => {
-    const insights: MetaInsights = ad.insights?.data?.[0] ?? {}
-    const actions: MetaAction[] = insights.actions ?? []
-    const actionValues: MetaAction[] = insights.action_values ?? []
+    const outboundClicks = getAction(r.outbound_clicks, 'outbound_click')
+    const lpViews        = getAction(r.actions, 'landing_page_view')
+    const purchases      = getAction(r.actions, 'purchase') || getAction(r.actions, 'omni_purchase')
+    const revenue        = getAction(r.action_values, 'purchase') || getAction(r.action_values, 'omni_purchase')
 
-    const spend       = parseFloat(insights.spend ?? '0')
-    const impressions = parseInt(insights.impressions ?? '0')
-    const clicks      = parseInt(insights.clicks ?? '0')
-    const ctr         = parseFloat(insights.ctr ?? '0')
-    const cpm         = parseFloat(insights.cpm ?? '0')
+    const video3s    = getVideoField(r.video_play_actions)
+    const video15s   = getVideoField(r.video_thruplay_watched_actions)
+    const video25pct = getVideoField(r.video_p25_watched_actions)
+    const video30s   = getVideoField(r.video_30_sec_watched_actions)
+    const video50pct = getVideoField(r.video_p50_watched_actions)
+    const video75pct = getVideoField(r.video_p75_watched_actions)
+    const video95pct = getVideoField(r.video_p95_watched_actions)
+    const video100pct = getVideoField(r.video_p100_watched_actions)
 
-    const purchases = getAction(actions, 'purchase') || getAction(actions, 'omni_purchase')
-    const revenue   = getActionValue(actionValues, 'purchase') || getActionValue(actionValues, 'omni_purchase')
-
-    const outboundClicks = getAction(actions, 'outbound_click')
-    const lpViews        = getAction(actions, 'landing_page_view')
-
-    // 3S VV — video_play_actions conta reproduções iniciadas (padrão Meta = 3s)
-    const video3s    = getVideoField(insights.video_play_actions)
-    // 15S VV — ThruPlay: assistiu 15s ou até o final se menor que 15s
-    const video15s   = getVideoField(insights.video_thruplay_watched_actions)
-    const video25pct = getVideoField(insights.video_p25_watched_actions)
-    const video30s   = getVideoField(insights.video_30_sec_watched_actions)
-    const video50pct = getVideoField(insights.video_p50_watched_actions)
-    const video75pct = getVideoField(insights.video_p75_watched_actions)
-    const video95pct = getVideoField(insights.video_p95_watched_actions)
-    const video100pct = getVideoField(insights.video_p100_watched_actions)
-
-    // Hook Rate = Views 3s / Impressões
-    const hookRate = impressions > 0 ? (video3s / impressions) * 100 : 0
-    // Body Rate = Views 15s / Views 3s
-    const bodyRate = video3s > 0 ? (video15s / video3s) * 100 : 0
+    const hookRate  = impressions > 0 ? (video3s / impressions) * 100 : 0
+    const bodyRate  = video3s > 0 ? (video15s / video3s) * 100 : 0
     const roas      = spend > 0 ? revenue / spend : 0
     const cpa       = purchases > 0 ? spend / purchases : 0
-    const cpc       = outboundClicks > 0 ? spend / outboundClicks : (clicks > 0 ? spend / clicks : 0)
+    const effectiveClicks = outboundClicks || clicks
+    const cpc       = effectiveClicks > 0 ? spend / effectiveClicks : 0
     const avgTicket = purchases > 0 ? revenue / purchases : 0
-    const convRate  = outboundClicks > 0 ? (purchases / outboundClicks) * 100 : 0
+    const convRate  = effectiveClicks > 0 ? (purchases / effectiveClicks) * 100 : 0
 
     return {
-      ad_id:        ad.id,
-      ad_name:      ad.name,
+      ad_id:        r.ad_id,
+      ad_name:      r.ad_name,
       spend,
-      clicks:       outboundClicks || clicks,
+      clicks:       effectiveClicks,
       impressions,
       lp_views:     lpViews,
       video_views:  video3s,
