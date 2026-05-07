@@ -169,5 +169,48 @@ export async function GET(req: Request) {
     }
   })
 
-  return NextResponse.json({ ads })
+  // Agrupa por nome exato — criativos com mesmo nome somam métricas
+  const grouped = new Map<string, typeof ads[0]>()
+
+  for (const ad of ads) {
+    const key = ad.ad_name.trim()
+    const existing = grouped.get(key)
+
+    if (!existing) {
+      grouped.set(key, { ...ad })
+      continue
+    }
+
+    existing.spend        += ad.spend
+    existing.clicks       += ad.clicks
+    existing.impressions  += ad.impressions
+    existing.lp_views     += ad.lp_views
+    existing.video_views  += ad.video_views
+    existing.purchases    += ad.purchases
+    existing.revenue      += ad.revenue
+    existing.video_3s     += ad.video_3s
+    existing.video_15s    += ad.video_15s
+    existing.video_25pct  += ad.video_25pct
+    existing.video_30s    += ad.video_30s
+    existing.video_50pct  += ad.video_50pct
+    existing.video_75pct  += ad.video_75pct
+    existing.video_95pct  += ad.video_95pct
+    existing.video_100pct += ad.video_100pct
+  }
+
+  // Recalcula taxas a partir dos totais
+  const merged = Array.from(grouped.values()).map((ad) => ({
+    ...ad,
+    ctr:        ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100   : 0,
+    hook_rate:  ad.impressions > 0 ? (ad.video_3s / ad.impressions) * 100 : 0,
+    body_rate:  ad.video_3s > 0    ? (ad.video_15s / ad.video_3s) * 100   : 0,
+    cpm:        ad.impressions > 0 ? (ad.spend / ad.impressions) * 1000   : 0,
+    cpc:        ad.clicks > 0      ? ad.spend / ad.clicks                 : 0,
+    cpa:        ad.purchases > 0   ? ad.spend / ad.purchases              : 0,
+    roas:       ad.spend > 0       ? ad.revenue / ad.spend                : 0,
+    avg_ticket: ad.purchases > 0   ? ad.revenue / ad.purchases            : 0,
+    conv_rate:  ad.clicks > 0      ? (ad.purchases / ad.clicks) * 100     : 0,
+  }))
+
+  return NextResponse.json({ ads: merged })
 }
