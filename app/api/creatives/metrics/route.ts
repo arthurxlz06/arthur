@@ -89,7 +89,7 @@ export async function GET(req: Request) {
     `&fields=${fields}` +
     `&time_range=${timeRange}` +
     `&access_token=${user.facebook_access_token}` +
-    `&limit=500`
+    `&limit=100`
 
   while (nextUrl) {
     const res = await fetch(nextUrl)
