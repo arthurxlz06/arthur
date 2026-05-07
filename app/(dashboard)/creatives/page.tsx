@@ -754,6 +754,14 @@ export default function CreativesPage() {
   const [linkModal, setLinkModal] = useState<string | null>(null)
   const [showCsvModal, setShowCsvModal] = useState(false)
 
+  // Dropbox
+  const [dropboxConnected, setDropboxConnected] = useState<boolean | null>(null)
+  const [dropboxFolders, setDropboxFolders] = useState<{ name: string; path: string }[]>([])
+  const [dropboxFolder, setDropboxFolder] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
+  const [syncError, setSyncError] = useState('')
+
   // Load saved filters from localStorage
   useEffect(() => {
     try {
@@ -785,6 +793,64 @@ export default function CreativesPage() {
 
   const handleDeleteFilterSet = (name: string) => {
     persistSavedSets(savedFilterSets.filter((s) => s.name !== name))
+  }
+
+  // Check Dropbox connection + load root folders
+  useEffect(() => {
+    fetch('/api/dropbox/status')
+      .then((r) => r.json())
+      .then((d: { connected?: boolean }) => {
+        setDropboxConnected(d.connected ?? false)
+        if (d.connected) {
+          fetch('/api/dropbox/sync')
+            .then((r) => r.json())
+            .then((fd: { folders?: { name: string; path: string }[] }) => {
+              const list = fd.folders ?? []
+              setDropboxFolders(list)
+              if (list.length > 0) setDropboxFolder(list[0].path)
+            })
+            .catch(() => {})
+        }
+      })
+      .catch(() => setDropboxConnected(false))
+  }, [])
+
+  // Handle ?dropbox=connected query param after OAuth callback
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('dropbox') === 'connected') {
+      setDropboxConnected(true)
+      window.history.replaceState({}, '', '/creatives')
+    }
+  }, [])
+
+  const handleSync = async () => {
+    if (!dropboxFolder || ads.length === 0) return
+    setSyncing(true)
+    setSyncResult(null)
+    setSyncError('')
+    try {
+      const res = await fetch('/api/dropbox/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder_path: dropboxFolder,
+          ad_names: ads.map((a) => a.ad_name),
+        }),
+      })
+      const data = await res.json() as { matched?: number; total_files?: number; error?: string }
+      if (data.error) {
+        setSyncError(data.error)
+      } else {
+        setSyncResult({ matched: data.matched ?? 0, total: data.total_files ?? 0 })
+        await fetchLinks()
+      }
+    } catch {
+      setSyncError('Erro ao sincronizar')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   // Load selected ad accounts
@@ -930,6 +996,97 @@ export default function CreativesPage() {
           <Upload size={13} />
           Importar CSV
         </button>
+      </div>
+
+      {/* Dropbox panel */}
+      <div
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '14px 16px',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 40 40" fill="none">
+            <path d="M10 4L20 10.5L10 17L0 10.5L10 4Z" fill="#0061FF"/>
+            <path d="M30 4L40 10.5L30 17L20 10.5L30 4Z" fill="#0061FF"/>
+            <path d="M0 23.5L10 17L20 23.5L10 30L0 23.5Z" fill="#0061FF"/>
+            <path d="M20 23.5L30 17L40 23.5L30 30L20 23.5Z" fill="#0061FF"/>
+            <path d="M10 31.5L20 25L30 31.5L20 38L10 31.5Z" fill="#0061FF"/>
+          </svg>
+          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)' }}>Dropbox</span>
+        </div>
+
+        {dropboxConnected === null && (
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Verificando...</span>
+        )}
+
+        {dropboxConnected === false && (
+          <a
+            href="/api/dropbox/auth"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              padding: '6px 12px', borderRadius: 'var(--radius-sm)',
+              background: '#0061FF', color: 'white', textDecoration: 'none',
+              fontSize: '12px', fontWeight: '500',
+            }}
+          >
+            Conectar Dropbox
+          </a>
+        )}
+
+        {dropboxConnected === true && (
+          <>
+            <span style={{ fontSize: '12px', color: 'var(--status-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={12} /> Conectado
+            </span>
+
+            {dropboxFolders.length > 0 ? (
+              <select
+                value={dropboxFolder}
+                onChange={(e) => setDropboxFolder(e.target.value)}
+                style={{ ...selectStyle, fontSize: '12px' }}
+              >
+                {dropboxFolders.map((f) => (
+                  <option key={f.path} value={f.path}>{f.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem pastas na raiz</span>
+            )}
+
+            <button
+              onClick={handleSync}
+              disabled={syncing || ads.length === 0 || !dropboxFolder}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '6px 12px', borderRadius: 'var(--radius-sm)',
+                border: 'none', background: 'var(--accent)', color: 'white',
+                cursor: syncing || ads.length === 0 || !dropboxFolder ? 'not-allowed' : 'pointer',
+                fontSize: '12px', fontWeight: '500',
+                opacity: ads.length === 0 || !dropboxFolder ? 0.5 : 1,
+              }}
+            >
+              {syncing ? <Spinner size={11} /> : <PlaySquare size={12} />}
+              {syncing ? 'Sincronizando...' : 'Sincronizar vídeos'}
+            </button>
+
+            {syncResult && (
+              <span style={{ fontSize: '12px', color: 'var(--status-success)' }}>
+                {syncResult.matched} de {syncResult.total} arquivos vinculados
+              </span>
+            )}
+            {syncError && (
+              <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{syncError}</span>
+            )}
+          </>
+        )}
       </div>
 
       {/* Controls bar */}
