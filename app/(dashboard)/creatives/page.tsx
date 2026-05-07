@@ -1221,7 +1221,42 @@ export default function CreativesPage() {
         </button>
       </div>
 
-      {/* Search + Sort + Filter bar */}
+      {/* Search bar — filtro por nome do anúncio */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '10px 14px',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-border)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '8px',
+        }}
+      >
+        <Filter size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+        <input
+          type="text"
+          placeholder="Filtrar anúncios por nome..."
+          value={filters.search}
+          onChange={(e) => setFilter('search', e.target.value)}
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: '14px',
+            color: 'var(--text-primary)',
+          }}
+        />
+        {filters.search && (
+          <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Sort + Filter bar */}
       <div
         style={{
           background: 'var(--bg-surface)',
@@ -1231,30 +1266,6 @@ export default function CreativesPage() {
           overflow: 'hidden',
         }}
       >
-        {/* Search row */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bg-border)', gap: '8px' }}>
-          <Filter size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Buscar por nome do criativo..."
-            value={filters.search}
-            onChange={(e) => setFilter('search', e.target.value)}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              fontSize: '14px',
-              color: 'var(--text-primary)',
-            }}
-          />
-          {filters.search && (
-            <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
         {/* Controls row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', flexWrap: 'wrap' }}>
           <ArrowUpDown size={13} color="var(--text-muted)" />
