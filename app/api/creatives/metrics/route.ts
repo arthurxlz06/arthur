@@ -34,6 +34,12 @@ interface MetaAd {
   insights?: { data?: MetaInsights[] }
 }
 
+interface MetaPagedResponse {
+  data?: MetaAd[]
+  paging?: { next?: string }
+  error?: { message: string }
+}
+
 export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
@@ -59,7 +65,6 @@ export async function GET(req: Request) {
   }
 
   const fields = [
-    'ad_name',
     'spend',
     'clicks',
     'impressions',
@@ -80,18 +85,24 @@ export async function GET(req: Request) {
     'website_ctr',
   ].join(',')
 
-  const url =
+  // Busca todas as páginas — sem filtro de status para incluir todos os criativos do período
+  const allAds: MetaAd[] = []
+  let nextUrl: string | undefined =
     `https://graph.facebook.com/${process.env.META_API_VERSION}/${accountId}/ads` +
     `?fields=id,name,insights.time_range({"since":"${since}","until":"${until}"}){${fields}}` +
-    `&filtering=[{"field":"ad.effective_status","operator":"IN","value":["ACTIVE","PAUSED"]}]` +
     `&access_token=${user.facebook_access_token}` +
-    `&limit=200`
+    `&limit=500`
 
-  const res = await fetch(url)
-  const data = await res.json() as { data?: MetaAd[]; error?: { message: string } }
+  while (nextUrl) {
+    const res = await fetch(nextUrl)
+    const page = await res.json() as MetaPagedResponse
 
-  if (data.error) {
-    return NextResponse.json({ error: data.error.message }, { status: 500 })
+    if (page.error) {
+      return NextResponse.json({ error: page.error.message }, { status: 500 })
+    }
+
+    allAds.push(...(page.data ?? []))
+    nextUrl = page.paging?.next
   }
 
   const getAction = (arr: MetaAction[], type: string) =>
@@ -103,7 +114,15 @@ export async function GET(req: Request) {
   const getVideoField = (arr: MetaAction[] | undefined, type = 'video_view') =>
     parseFloat(arr?.find((a) => a.action_type === type)?.value ?? '0')
 
-  const ads = (data.data ?? []).map((ad) => {
+  // Deduplica por ad_id
+  const seenIds = new Set<string>()
+  const uniqueAds = allAds.filter((ad) => {
+    if (seenIds.has(ad.id)) return false
+    seenIds.add(ad.id)
+    return true
+  })
+
+  const ads = uniqueAds.map((ad) => {
     const insights: MetaInsights = ad.insights?.data?.[0] ?? {}
     const actions: MetaAction[] = insights.actions ?? []
     const actionValues: MetaAction[] = insights.action_values ?? []
@@ -171,48 +190,5 @@ export async function GET(req: Request) {
     }
   })
 
-  // Agrupar por nome e somar métricas acumuláveis
-  const grouped = new Map<string, typeof ads[0]>()
-
-  for (const ad of ads) {
-    const key = ad.ad_name.trim()
-    const existing = grouped.get(key)
-
-    if (!existing) {
-      grouped.set(key, { ...ad })
-      continue
-    }
-
-    existing.spend        += ad.spend
-    existing.clicks       += ad.clicks
-    existing.impressions  += ad.impressions
-    existing.lp_views     += ad.lp_views
-    existing.video_views  += ad.video_views
-    existing.purchases    += ad.purchases
-    existing.revenue      += ad.revenue
-    existing.video_3s     += ad.video_3s
-    existing.video_15s    += ad.video_15s
-    existing.video_25pct  += ad.video_25pct
-    existing.video_30s    += ad.video_30s
-    existing.video_50pct  += ad.video_50pct
-    existing.video_75pct  += ad.video_75pct
-    existing.video_95pct  += ad.video_95pct
-    existing.video_100pct += ad.video_100pct
-  }
-
-  // Recalcular taxas a partir dos totais — nunca somar percentuais
-  const aggregated = Array.from(grouped.values()).map((ad) => ({
-    ...ad,
-    ctr:        ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100    : 0,
-    hook_rate:  ad.impressions > 0 ? (ad.video_3s / ad.impressions) * 100  : 0,
-    body_rate:  ad.video_3s > 0    ? (ad.video_15s / ad.video_3s) * 100    : 0,
-    cpm:        ad.impressions > 0 ? (ad.spend / ad.impressions) * 1000    : 0,
-    cpc:        ad.clicks > 0      ? ad.spend / ad.clicks                  : 0,
-    cpa:        ad.purchases > 0   ? ad.spend / ad.purchases               : 0,
-    roas:       ad.spend > 0       ? ad.revenue / ad.spend                 : 0,
-    avg_ticket: ad.purchases > 0   ? ad.revenue / ad.purchases             : 0,
-    conv_rate:  ad.clicks > 0      ? (ad.purchases / ad.clicks) * 100      : 0,
-  }))
-
-  return NextResponse.json({ ads: aggregated })
+  return NextResponse.json({ ads })
 }

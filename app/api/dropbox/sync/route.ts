@@ -133,10 +133,7 @@ export async function POST(req: Request) {
   for (const file of files) {
     const fileNorm = normalizeForMatch(file.name)
 
-    const matchedAd = ad_names.find((adName) => {
-      const adNorm = normalizeForMatch(adName)
-      return adNorm.includes(fileNorm) || fileNorm.includes(adNorm)
-    })
+    const matchedAd = ad_names.find((adName) => normalizeForMatch(adName) === fileNorm)
 
     if (!matchedAd) continue
 
