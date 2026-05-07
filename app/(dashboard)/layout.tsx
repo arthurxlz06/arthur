@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   LayoutDashboard,
@@ -12,6 +12,9 @@ import {
   Settings,
   LogOut,
   Zap,
+  Menu,
+  X,
+  PlaySquare,
 } from 'lucide-react'
 
 const navItems = [
@@ -20,12 +23,27 @@ const navItems = [
   { href: '/library', icon: FolderOpen, label: 'Biblioteca' },
   { href: '/publish', icon: Radio, label: 'Publicar' },
   { href: '/history', icon: History, label: 'Histórico' },
+  { href: '/creatives', icon: PlaySquare, label: 'Criativos' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
+  const [isMobile, setIsMobile] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [pathname])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -61,6 +79,79 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-base)' }}>
+      {/* Mobile top bar */}
+      {isMobile && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '52px',
+            background: 'var(--bg-surface)',
+            borderBottom: '1px solid var(--bg-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 16px',
+            zIndex: 50,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '6px',
+                background: 'var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Zap size={12} color="white" />
+            </div>
+            <span
+              style={{
+                fontSize: '14px',
+                fontWeight: '700',
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.03em',
+              }}
+            >
+              AdUploader
+            </span>
+          </div>
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              padding: '4px',
+            }}
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+      )}
+
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            zIndex: 35,
+            backdropFilter: 'blur(2px)',
+          }}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
         style={{
@@ -75,6 +166,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           top: 0,
           left: 0,
           bottom: 0,
+          zIndex: 40,
+          transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+          transition: 'transform 250ms ease',
         }}
       >
         {/* Logo */}
@@ -202,7 +296,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main style={{ flex: 1, marginLeft: '240px', padding: '32px', minHeight: '100vh' }}>
+      <main
+        style={{
+          flex: 1,
+          marginLeft: isMobile ? '0' : '240px',
+          padding: isMobile ? '68px 16px 24px' : '32px',
+          minHeight: '100vh',
+        }}
+      >
         {children}
       </main>
     </div>

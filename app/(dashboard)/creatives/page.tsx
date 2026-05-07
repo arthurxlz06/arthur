@@ -1,0 +1,1211 @@
+'use client'
+
+import { useEffect, useRef, useState, useCallback } from 'react'
+import {
+  PlaySquare,
+  ChevronDown,
+  ChevronUp,
+  Link2,
+  X,
+  Check,
+  Upload,
+  ArrowUpDown,
+  Filter,
+} from 'lucide-react'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface AdAccount {
+  id: string
+  meta_account_id: string
+  name: string
+}
+
+interface AdMetrics {
+  ad_id: string
+  ad_name: string
+  spend: number
+  clicks: number
+  impressions: number
+  lp_views: number
+  video_views: number
+  ctr: number
+  hook_rate: number
+  body_rate: number
+  cpm: number
+  cpc: number
+  cpa: number
+  purchases: number
+  revenue: number
+  roas: number
+  avg_ticket: number
+  conv_rate: number
+  video_3s: number
+  video_15s: number
+  video_25pct: number
+  video_30s: number
+  video_50pct: number
+  video_75pct: number
+  video_95pct: number
+  video_100pct: number
+}
+
+interface CreativeLink {
+  id: string
+  ad_name: string
+  dropbox_url: string
+  dropbox_direct_url: string
+}
+
+interface Creative extends AdMetrics {
+  link: CreativeLink | null
+}
+
+type SortField = keyof AdMetrics
+type SortDir = 'asc' | 'desc'
+
+interface Filters {
+  search: string
+  roas_min: string
+  roas_max: string
+  spend_min: string
+  spend_max: string
+  revenue_min: string
+  revenue_max: string
+  cpa_min: string
+  cpa_max: string
+  ctr_min: string
+  ctr_max: string
+  hook_rate_min: string
+  hook_rate_max: string
+}
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
+
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+function fmtBRL(n: number) {
+  return brl.format(n)
+}
+
+function fmtPct(n: number) {
+  return `${n.toFixed(1)}%`
+}
+
+function fmtROAS(n: number) {
+  return `${n.toFixed(2)}x`
+}
+
+function fmtInt(n: number) {
+  return new Intl.NumberFormat('pt-BR').format(Math.round(n))
+}
+
+// ─── Spinner ─────────────────────────────────────────────────────────────────
+
+function Spinner({ size = 16 }: { size?: number }) {
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        border: '2px solid var(--bg-border)',
+        borderTopColor: 'var(--accent)',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        flexShrink: 0,
+      }}
+    />
+  )
+}
+
+// ─── Video Player ─────────────────────────────────────────────────────────────
+
+function VideoPlayer({
+  src,
+  adName,
+  onLink,
+}: {
+  src: string | null
+  adName: string
+  onLink: () => void
+}) {
+  if (!src) {
+    return (
+      <div
+        style={{
+          aspectRatio: '9/16',
+          background: 'var(--bg-elevated)',
+          border: '1px dashed var(--bg-border)',
+          borderRadius: '8px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+        }}
+        onClick={onLink}
+        title={`Vincular vídeo para "${adName}"`}
+      >
+        <PlaySquare size={28} color="var(--text-muted)" />
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', padding: '0 8px' }}>
+          + Vincular vídeo
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <video
+      src={src}
+      controls
+      preload="metadata"
+      style={{ width: '100%', borderRadius: '8px', aspectRatio: '9/16', background: '#000', display: 'block' }}
+    />
+  )
+}
+
+// ─── Creative Card ────────────────────────────────────────────────────────────
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>{value}</span>
+    </div>
+  )
+}
+
+function CreativeCard({
+  creative,
+  onLink,
+}: {
+  creative: Creative
+  onLink: (adName: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div
+      style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--bg-border)',
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Video */}
+      <div style={{ padding: '12px 12px 0' }}>
+        <VideoPlayer
+          src={creative.link?.dropbox_direct_url ?? null}
+          adName={creative.ad_name}
+          onLink={() => onLink(creative.ad_name)}
+        />
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Ad name */}
+        <p
+          style={{
+            fontSize: '12px',
+            fontWeight: '600',
+            color: 'var(--text-primary)',
+            marginBottom: '10px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={creative.ad_name}
+        >
+          {creative.ad_name}
+        </p>
+
+        {/* Primary metrics */}
+        <div style={{ borderTop: '1px solid var(--bg-border)', paddingTop: '8px' }}>
+          <MetricRow label="ROAS" value={fmtROAS(creative.roas)} />
+          <MetricRow label="Gasto" value={fmtBRL(creative.spend)} />
+          <MetricRow label="Receita" value={fmtBRL(creative.revenue)} />
+          <MetricRow label="CPA" value={creative.cpa > 0 ? fmtBRL(creative.cpa) : '—'} />
+          <MetricRow label="CTR" value={fmtPct(creative.ctr)} />
+          <MetricRow label="Hook Rate" value={fmtPct(creative.hook_rate)} />
+          <MetricRow label="Body Rate" value={fmtPct(creative.body_rate)} />
+          <MetricRow label="CPM" value={fmtBRL(creative.cpm)} />
+        </div>
+
+        {/* Expand toggle */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            marginTop: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            width: '100%',
+            padding: '5px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--bg-border)',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: '11px',
+          }}
+        >
+          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {expanded ? 'Menos métricas' : 'Ver mais métricas'}
+        </button>
+
+        {/* Expanded metrics */}
+        {expanded && (
+          <div style={{ borderTop: '1px solid var(--bg-border)', marginTop: '10px', paddingTop: '8px' }}>
+            <MetricRow label="Cliques" value={fmtInt(creative.clicks)} />
+            <MetricRow label="Impressões" value={fmtInt(creative.impressions)} />
+            <MetricRow label="LP Views" value={fmtInt(creative.lp_views)} />
+            <MetricRow label="Video Views" value={fmtInt(creative.video_views)} />
+            <MetricRow label="CPC" value={creative.cpc > 0 ? fmtBRL(creative.cpc) : '—'} />
+            <MetricRow label="Vendas" value={fmtInt(creative.purchases)} />
+            <MetricRow label="Ticket Médio" value={creative.avg_ticket > 0 ? fmtBRL(creative.avg_ticket) : '—'} />
+            <MetricRow label="Tx Conversão" value={fmtPct(creative.conv_rate)} />
+            <div style={{ borderTop: '1px solid var(--bg-border)', margin: '6px 0' }} />
+            <MetricRow label="3S VV" value={fmtInt(creative.video_3s)} />
+            <MetricRow label="15S VV" value={fmtInt(creative.video_15s)} />
+            <MetricRow label="25% VV" value={fmtInt(creative.video_25pct)} />
+            <MetricRow label="30S VV" value={fmtInt(creative.video_30s)} />
+            <MetricRow label="50% VV" value={fmtInt(creative.video_50pct)} />
+            <MetricRow label="75% VV" value={fmtInt(creative.video_75pct)} />
+            <MetricRow label="95% VV" value={fmtInt(creative.video_95pct)} />
+            <MetricRow label="100% VV" value={fmtInt(creative.video_100pct)} />
+          </div>
+        )}
+
+        {/* Link button if no video */}
+        {!creative.link && (
+          <button
+            onClick={() => onLink(creative.ad_name)}
+            style={{
+              marginTop: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '5px',
+              width: '100%',
+              padding: '7px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--accent)',
+              background: 'rgba(91,110,245,0.08)',
+              color: 'var(--accent)',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: '500',
+            }}
+          >
+            <Link2 size={12} />
+            Vincular vídeo
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Link Modal ───────────────────────────────────────────────────────────────
+
+function LinkModal({
+  adName,
+  onClose,
+  onSave,
+}: {
+  adName: string
+  onClose: () => void
+  onSave: (adName: string, url: string) => Promise<void>
+}) {
+  const [url, setUrl] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSave = async () => {
+    if (!url.trim()) { setError('Cole o link do Dropbox'); return }
+    if (!url.includes('dropbox.com') && !url.includes('dropboxusercontent.com')) {
+      setError('Use um link do Dropbox')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      await onSave(adName, url.trim())
+      onClose()
+    } catch {
+      setError('Erro ao salvar o link')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.65)',
+        backdropFilter: 'blur(3px)',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '24px',
+          width: '100%',
+          maxWidth: '480px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Vincular vídeo
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Ad:</p>
+        <p
+          style={{
+            fontSize: '13px',
+            fontWeight: '500',
+            color: 'var(--text-primary)',
+            marginBottom: '16px',
+            padding: '8px 10px',
+            background: 'var(--bg-elevated)',
+            borderRadius: 'var(--radius-sm)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {adName}
+        </p>
+
+        <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+          Link do Dropbox
+        </label>
+        <input
+          type="url"
+          autoFocus
+          placeholder="https://www.dropbox.com/s/..."
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setError('') }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
+          style={{
+            width: '100%',
+            padding: '9px 12px',
+            fontSize: '13px',
+            borderRadius: 'var(--radius-sm)',
+            border: `1px solid ${error ? 'rgba(239,68,68,0.5)' : 'var(--bg-border)'}`,
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-primary)',
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+        {error && <p style={{ fontSize: '11px', color: 'var(--status-error)', marginTop: '5px' }}>{error}</p>}
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--bg-border)',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: 'white',
+              cursor: saving ? 'wait' : 'pointer',
+              fontSize: '13px',
+              fontWeight: '500',
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving ? <Spinner size={12} /> : <Check size={14} />}
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── CSV Import Modal ─────────────────────────────────────────────────────────
+
+function CsvImportModal({
+  onClose,
+  onImport,
+}: {
+  onClose: () => void
+  onImport: (batch: { ad_name: string; dropbox_url: string }[]) => Promise<void>
+}) {
+  const [csv, setCsv] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const parseAndImport = async (raw: string) => {
+    const lines = raw.trim().split('\n').filter(Boolean)
+    const header = lines[0].toLowerCase()
+    const dataLines = header.includes('ad_name') ? lines.slice(1) : lines
+
+    const batch = dataLines.map((line) => {
+      const commaIdx = line.indexOf(',')
+      if (commaIdx === -1) return null
+      return {
+        ad_name: line.slice(0, commaIdx).trim(),
+        dropbox_url: line.slice(commaIdx + 1).trim(),
+      }
+    }).filter((r): r is { ad_name: string; dropbox_url: string } => r !== null && r.ad_name.length > 0 && r.dropbox_url.length > 0)
+
+    if (batch.length === 0) {
+      setError('Nenhuma linha válida encontrada. Formato esperado: ad_name,dropbox_url')
+      return
+    }
+
+    setImporting(true)
+    setError('')
+    try {
+      await onImport(batch)
+      onClose()
+    } catch {
+      setError('Erro ao importar')
+      setImporting(false)
+    }
+  }
+
+  const handleFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      setCsv(text)
+    }
+    reader.readAsText(file)
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.65)',
+        backdropFilter: 'blur(3px)',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '24px',
+          width: '100%',
+          maxWidth: '520px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Importar CSV
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+          Formato esperado — duas colunas: <code style={{ background: 'var(--bg-elevated)', padding: '1px 4px', borderRadius: '3px' }}>ad_name,dropbox_url</code>
+        </p>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          style={{ display: 'none' }}
+          onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
+        />
+
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--bg-border)',
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: '12px',
+            marginBottom: '12px',
+          }}
+        >
+          <Upload size={13} /> Selecionar arquivo CSV
+        </button>
+
+        <textarea
+          placeholder={'ad_name,dropbox_url\nVideo Oferta Julho,https://www.dropbox.com/s/xxx/video.mp4?dl=0\nVideo Prova Social,https://www.dropbox.com/s/yyy/prova.mp4?dl=0'}
+          value={csv}
+          onChange={(e) => { setCsv(e.target.value); setError('') }}
+          rows={7}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            fontSize: '12px',
+            fontFamily: 'monospace',
+            borderRadius: 'var(--radius-sm)',
+            border: `1px solid ${error ? 'rgba(239,68,68,0.5)' : 'var(--bg-border)'}`,
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-primary)',
+            outline: 'none',
+            resize: 'vertical',
+            boxSizing: 'border-box',
+          }}
+        />
+        {error && <p style={{ fontSize: '11px', color: 'var(--status-error)', marginTop: '5px' }}>{error}</p>}
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--bg-border)',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => parseAndImport(csv)}
+            disabled={importing || !csv.trim()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: 'white',
+              cursor: importing || !csv.trim() ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              fontWeight: '500',
+              opacity: importing || !csv.trim() ? 0.6 : 1,
+            }}
+          >
+            {importing ? <Spinner size={12} /> : <Check size={14} />}
+            Importar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Filter Input ─────────────────────────────────────────────────────────────
+
+function FilterInput({
+  label,
+  minKey,
+  maxKey,
+  filters,
+  onChange,
+}: {
+  label: string
+  minKey: keyof Filters
+  maxKey: keyof Filters
+  filters: Filters
+  onChange: (k: keyof Filters, v: string) => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '130px' }}>
+      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>{label}</span>
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <input
+          type="number"
+          placeholder="Min"
+          value={filters[minKey]}
+          onChange={(e) => onChange(minKey, e.target.value)}
+          style={filterInputStyle}
+        />
+        <input
+          type="number"
+          placeholder="Max"
+          value={filters[maxKey]}
+          onChange={(e) => onChange(maxKey, e.target.value)}
+          style={filterInputStyle}
+        />
+      </div>
+    </div>
+  )
+}
+
+const filterInputStyle: React.CSSProperties = {
+  width: '58px',
+  padding: '5px 6px',
+  fontSize: '11px',
+  borderRadius: '4px',
+  border: '1px solid var(--bg-border)',
+  background: 'var(--bg-elevated)',
+  color: 'var(--text-primary)',
+  outline: 'none',
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS: { value: SortField; label: string }[] = [
+  { value: 'roas', label: 'ROAS' },
+  { value: 'spend', label: 'Gasto' },
+  { value: 'revenue', label: 'Receita' },
+  { value: 'cpa', label: 'CPA' },
+  { value: 'ctr', label: 'CTR' },
+  { value: 'hook_rate', label: 'Hook Rate' },
+  { value: 'body_rate', label: 'Body Rate' },
+  { value: 'cpm', label: 'CPM' },
+  { value: 'purchases', label: 'Vendas' },
+  { value: 'impressions', label: 'Impressões' },
+]
+
+const DEFAULT_FILTERS: Filters = {
+  search: '',
+  roas_min: '', roas_max: '',
+  spend_min: '', spend_max: '',
+  revenue_min: '', revenue_max: '',
+  cpa_min: '', cpa_max: '',
+  ctr_min: '', ctr_max: '',
+  hook_rate_min: '', hook_rate_max: '',
+}
+
+export default function CreativesPage() {
+  const [accounts, setAccounts] = useState<AdAccount[]>([])
+  const [selectedAccount, setSelectedAccount] = useState('')
+  const [since, setSince] = useState(() => {
+    const d = new Date()
+    d.setDate(1)
+    return d.toISOString().slice(0, 10)
+  })
+  const [until, setUntil] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const [ads, setAds] = useState<AdMetrics[]>([])
+  const [links, setLinks] = useState<CreativeLink[]>([])
+  const [loadingAds, setLoadingAds] = useState(false)
+  const [adsError, setAdsError] = useState('')
+
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
+  const [showFilters, setShowFilters] = useState(false)
+  const [sortField, setSortField] = useState<SortField>('roas')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  const [linkModal, setLinkModal] = useState<string | null>(null)
+  const [showCsvModal, setShowCsvModal] = useState(false)
+
+  // Load selected ad accounts
+  useEffect(() => {
+    fetch('/api/accounts/selected')
+      .then((r) => r.json())
+      .then((data: { accounts?: AdAccount[] }) => {
+        const list = data.accounts ?? []
+        setAccounts(list)
+        if (list.length > 0) setSelectedAccount(list[0].meta_account_id)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Load Dropbox links
+  const fetchLinks = useCallback(async () => {
+    const res = await fetch('/api/creatives/links')
+    const data = await res.json() as { links?: CreativeLink[] }
+    setLinks(data.links ?? [])
+  }, [])
+
+  useEffect(() => { fetchLinks() }, [fetchLinks])
+
+  // Fetch ads
+  const fetchAds = useCallback(async () => {
+    if (!selectedAccount) return
+    setLoadingAds(true)
+    setAdsError('')
+    try {
+      const params = new URLSearchParams({ account_id: selectedAccount, since, until })
+      const res = await fetch(`/api/creatives/metrics?${params}`)
+      const data = await res.json() as { ads?: AdMetrics[]; error?: string }
+      if (data.error) {
+        setAdsError(data.error)
+        setAds([])
+      } else {
+        setAds(data.ads ?? [])
+      }
+    } catch {
+      setAdsError('Erro ao buscar métricas')
+    } finally {
+      setLoadingAds(false)
+    }
+  }, [selectedAccount, since, until])
+
+  // Build creatives = merge ads + links
+  const creatives: Creative[] = ads.map((ad) => ({
+    ...ad,
+    link: links.find((l) => l.ad_name === ad.ad_name) ?? null,
+  }))
+
+  // Client-side filter + sort
+  const f = (v: string) => parseFloat(v)
+  const filtered = creatives
+    .filter((c) => c.ad_name.toLowerCase().includes(filters.search.toLowerCase()))
+    .filter((c) => filters.roas_min ? c.roas >= f(filters.roas_min) : true)
+    .filter((c) => filters.roas_max ? c.roas <= f(filters.roas_max) : true)
+    .filter((c) => filters.spend_min ? c.spend >= f(filters.spend_min) : true)
+    .filter((c) => filters.spend_max ? c.spend <= f(filters.spend_max) : true)
+    .filter((c) => filters.revenue_min ? c.revenue >= f(filters.revenue_min) : true)
+    .filter((c) => filters.revenue_max ? c.revenue <= f(filters.revenue_max) : true)
+    .filter((c) => filters.cpa_min ? c.cpa >= f(filters.cpa_min) : true)
+    .filter((c) => filters.cpa_max ? c.cpa <= f(filters.cpa_max) : true)
+    .filter((c) => filters.ctr_min ? c.ctr >= f(filters.ctr_min) : true)
+    .filter((c) => filters.ctr_max ? c.ctr <= f(filters.ctr_max) : true)
+    .filter((c) => filters.hook_rate_min ? c.hook_rate >= f(filters.hook_rate_min) : true)
+    .filter((c) => filters.hook_rate_max ? c.hook_rate <= f(filters.hook_rate_max) : true)
+
+  const sorted = [...filtered].sort((a, b) => {
+    const av = a[sortField] as number
+    const bv = b[sortField] as number
+    return sortDir === 'desc' ? bv - av : av - bv
+  })
+
+  const setFilter = (k: keyof Filters, v: string) => setFilters((prev) => ({ ...prev, [k]: v }))
+
+  const handleSaveLink = async (adName: string, url: string) => {
+    await fetch('/api/creatives/links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ad_name: adName, dropbox_url: url }),
+    })
+    await fetchLinks()
+  }
+
+  const handleCsvImport = async (batch: { ad_name: string; dropbox_url: string }[]) => {
+    await fetch('/api/creatives/links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch }),
+    })
+    await fetchLinks()
+  }
+
+  const activeFiltersCount = Object.entries(filters).filter(([k, v]) => k !== 'search' && v !== '').length
+
+  return (
+    <div>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          marginBottom: '24px',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: '24px',
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.03em',
+              marginBottom: '4px',
+            }}
+          >
+            Criativos
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+            {ads.length > 0
+              ? `${sorted.length} de ${ads.length} criativos`
+              : 'Selecione uma conta e período para carregar'}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCsvModal(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--bg-border)',
+            background: 'var(--bg-surface)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: '13px',
+          }}
+        >
+          <Upload size={13} />
+          Importar CSV
+        </button>
+      </div>
+
+      {/* Controls bar */}
+      <div
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '14px 16px',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Account selector */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>Conta</label>
+          <select
+            value={selectedAccount}
+            onChange={(e) => setSelectedAccount(e.target.value)}
+            style={selectStyle}
+          >
+            {accounts.length === 0 && <option value="">Nenhuma conta selecionada</option>}
+            {accounts.map((a) => (
+              <option key={a.id} value={a.meta_account_id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date range */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>De</label>
+          <input
+            type="date"
+            value={since}
+            onChange={(e) => setSince(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>Até</label>
+          <input
+            type="date"
+            value={until}
+            onChange={(e) => setUntil(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        <button
+          onClick={fetchAds}
+          disabled={loadingAds || !selectedAccount}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '8px 16px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: 'var(--accent)',
+            color: 'white',
+            cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
+            fontSize: '13px',
+            fontWeight: '500',
+            opacity: !selectedAccount ? 0.5 : 1,
+          }}
+        >
+          {loadingAds ? <Spinner size={12} /> : null}
+          Buscar
+        </button>
+      </div>
+
+      {/* Sort + Filter bar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Sort */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowUpDown size={13} color="var(--text-muted)" />
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Ordenar:</span>
+          <select
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value as SortField)}
+            style={{ ...selectStyle, fontSize: '12px', padding: '5px 8px' }}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--bg-border)',
+              background: 'var(--bg-surface)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            {sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            {sortDir === 'desc' ? 'Decrescente' : 'Crescente'}
+          </button>
+        </div>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Buscar por nome..."
+          value={filters.search}
+          onChange={(e) => setFilter('search', e.target.value)}
+          style={{ ...inputStyle, width: '200px' }}
+        />
+
+        {/* Filter toggle */}
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '5px 10px',
+            borderRadius: 'var(--radius-sm)',
+            border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`,
+            background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'var(--bg-surface)',
+            color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: '12px',
+          }}
+        >
+          <Filter size={12} />
+          Filtros
+          {activeFiltersCount > 0 && (
+            <span
+              style={{
+                background: 'var(--accent)',
+                color: 'white',
+                borderRadius: '10px',
+                padding: '0 5px',
+                fontSize: '10px',
+                fontWeight: '600',
+              }}
+            >
+              {activeFiltersCount}
+            </span>
+          )}
+        </button>
+
+        {activeFiltersCount > 0 && (
+          <button
+            onClick={() => setFilters(DEFAULT_FILTERS)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--bg-border)',
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            <X size={11} /> Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--bg-border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px',
+            marginBottom: '12px',
+            display: 'flex',
+            gap: '16px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <FilterInput label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
+          <FilterInput label="Gasto (R$)" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} />
+          <FilterInput label="Receita (R$)" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} />
+          <FilterInput label="CPA (R$)" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} />
+          <FilterInput label="CTR (%)" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} />
+          <FilterInput label="Hook Rate (%)" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} />
+        </div>
+      )}
+
+      {/* Error */}
+      {adsError && (
+        <div
+          style={{
+            padding: '12px 16px',
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--status-error)',
+            fontSize: '13px',
+            marginBottom: '16px',
+          }}
+        >
+          {adsError}
+        </div>
+      )}
+
+      {/* Loading */}
+      {loadingAds && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '32px 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+          <Spinner size={16} /> Carregando criativos...
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loadingAds && ads.length === 0 && !adsError && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '64px 32px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--bg-border)',
+            borderRadius: 'var(--radius-md)',
+          }}
+        >
+          <PlaySquare size={32} color="var(--text-muted)" style={{ margin: '0 auto 16px', display: 'block' }} />
+          <p style={{ color: 'var(--text-secondary)', fontSize: '15px', marginBottom: '8px' }}>
+            Nenhum criativo carregado
+          </p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            Selecione uma conta, defina o período e clique em Buscar
+          </p>
+        </div>
+      )}
+
+      {/* Grid */}
+      {!loadingAds && sorted.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: '12px',
+          }}
+        >
+          {sorted.map((c) => (
+            <CreativeCard
+              key={c.ad_id}
+              creative={c}
+              onLink={(adName) => setLinkModal(adName)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* No results after filter */}
+      {!loadingAds && ads.length > 0 && sorted.length === 0 && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '40px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--bg-border)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+          }}
+        >
+          Nenhum criativo corresponde aos filtros aplicados.
+        </div>
+      )}
+
+      {/* Link modal */}
+      {linkModal !== null && (
+        <LinkModal
+          adName={linkModal}
+          onClose={() => setLinkModal(null)}
+          onSave={handleSaveLink}
+        />
+      )}
+
+      {/* CSV modal */}
+      {showCsvModal && (
+        <CsvImportModal
+          onClose={() => setShowCsvModal(false)}
+          onImport={handleCsvImport}
+        />
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
+
+const selectStyle: React.CSSProperties = {
+  padding: '7px 10px',
+  fontSize: '13px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--bg-border)',
+  background: 'var(--bg-elevated)',
+  color: 'var(--text-primary)',
+  outline: 'none',
+  cursor: 'pointer',
+}
+
+const inputStyle: React.CSSProperties = {
+  padding: '7px 10px',
+  fontSize: '13px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--bg-border)',
+  background: 'var(--bg-elevated)',
+  color: 'var(--text-primary)',
+  outline: 'none',
+}

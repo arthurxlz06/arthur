@@ -55,6 +55,17 @@ export async function getAdAccountsByBM(
   return data.data
 }
 
+export async function getClientAdAccounts(
+  bmId: string,
+  accessToken: string
+): Promise<MetaAdAccount[]> {
+  const data = await metaFetch<{ data: MetaAdAccount[] }>(
+    `${BASE_URL}/${bmId}/client_ad_accounts?fields=id,name,account_status&access_token=${accessToken}`
+  )
+  return data.data
+}
+
+
 export async function validateToken(accessToken: string): Promise<boolean> {
   try {
     await metaFetch(`${BASE_URL}/me?fields=id&access_token=${accessToken}`)

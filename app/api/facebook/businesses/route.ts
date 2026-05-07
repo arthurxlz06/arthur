@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getBusinessManagers, getAdAccountsByBM } from '@/lib/facebook'
+import { getBusinessManagers, getAdAccountsByBM, getClientAdAccounts } from '@/lib/facebook'
 
 export async function GET() {
   const session = await auth()
@@ -86,10 +86,17 @@ export async function POST(req: Request) {
     bmDbId = newBM.id
   }
 
-  // Fetch ad accounts from Meta API
-  const accounts = await getAdAccountsByBM(bm_id, user.facebook_access_token as string)
+  // Fetch owned, partner-shared, and personal ad accounts in parallel
+  const [owned, client] = await Promise.all([
+    getAdAccountsByBM(bm_id, user.facebook_access_token as string),
+    getClientAdAccounts(bm_id, user.facebook_access_token as string),
+  ])
 
-  if (accounts.length > 0) {
+  const unique = Array.from(
+    new Map([...owned, ...client].map((a) => [a.id, a])).values()
+  )
+
+  if (unique.length > 0) {
     // Get existing accounts to preserve is_selected state
     const { data: existingAccounts } = await getSupabaseAdmin()
       .from('ad_accounts')
@@ -98,7 +105,7 @@ export async function POST(req: Request) {
 
     const existingMap = new Map(existingAccounts?.map((a) => [a.meta_account_id, a]) ?? [])
 
-    for (const acc of accounts) {
+    for (const acc of unique) {
       const existing = existingMap.get(acc.id)
       const payload = {
         bm_id: bmDbId,
@@ -120,7 +127,7 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ success: true, accounts_imported: accounts.length })
+  return NextResponse.json({ success: true, accounts_imported: unique.length })
 }
 
 export async function DELETE(req: Request) {
