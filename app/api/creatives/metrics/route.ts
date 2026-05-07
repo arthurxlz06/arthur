@@ -65,7 +65,6 @@ export async function GET(req: Request) {
   }
 
   const fields = [
-    'ad_name',
     'spend',
     'clicks',
     'impressions',
@@ -73,8 +72,6 @@ export async function GET(req: Request) {
     'action_values',
     'ctr',
     'cpm',
-    'cpp',
-    'cost_per_action_type',
     'video_p25_watched_actions',
     'video_p50_watched_actions',
     'video_p75_watched_actions',
@@ -82,7 +79,6 @@ export async function GET(req: Request) {
     'video_p100_watched_actions',
     'video_30_sec_watched_actions',
     'video_avg_time_watched_actions',
-    'outbound_clicks',
   ].join(',')
 
   const url =
