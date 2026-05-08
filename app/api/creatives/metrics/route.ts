@@ -104,7 +104,7 @@ export async function GET(req: Request) {
     const ctr         = parseFloat(r.ctr ?? '0')
     const cpm         = parseFloat(r.cpm ?? '0')
 
-    const outboundClicks = getAction(r.outbound_clicks, 'outbound_click')
+    const outboundClicks = getAction(r.actions, 'outbound_click')
     const lpViews        = getAction(r.actions, 'landing_page_view')
     const purchases      = getAction(r.actions, 'purchase') || getAction(r.actions, 'omni_purchase')
     const revenue        = getAction(r.action_values, 'purchase') || getAction(r.action_values, 'omni_purchase')

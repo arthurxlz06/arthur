@@ -807,6 +807,8 @@ export default function CreativesPage() {
   // Dropbox
   const [dropboxConnected, setDropboxConnected] = useState<boolean | null>(null)
   const [dropboxFolders, setDropboxFolders] = useState<{ name: string; path: string }[]>([])
+  const [dropboxBrowsePath, setDropboxBrowsePath] = useState('')
+  const [dropboxBrowseLoading, setDropboxBrowseLoading] = useState(false)
   const [dropboxFolder, setDropboxFolder] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
@@ -845,25 +847,30 @@ export default function CreativesPage() {
     persistSavedSets(savedFilterSets.filter((s) => s.name !== name))
   }
 
+  const browseDropbox = useCallback(async (path: string) => {
+    setDropboxBrowseLoading(true)
+    try {
+      const res = await fetch(`/api/dropbox/sync?path=${encodeURIComponent(path)}`)
+      const data = await res.json() as { folders?: { name: string; path: string }[] }
+      setDropboxFolders(data.folders ?? [])
+      setDropboxBrowsePath(path)
+    } catch {
+      setDropboxFolders([])
+    } finally {
+      setDropboxBrowseLoading(false)
+    }
+  }, [])
+
   // Check Dropbox connection + load root folders
   useEffect(() => {
     fetch('/api/dropbox/status')
       .then((r) => r.json())
       .then((d: { connected?: boolean }) => {
         setDropboxConnected(d.connected ?? false)
-        if (d.connected) {
-          fetch('/api/dropbox/sync')
-            .then((r) => r.json())
-            .then((fd: { folders?: { name: string; path: string }[] }) => {
-              const list = fd.folders ?? []
-              setDropboxFolders(list)
-              if (list.length > 0) setDropboxFolder(list[0].path)
-            })
-            .catch(() => {})
-        }
+        if (d.connected) browseDropbox('')
       })
       .catch(() => setDropboxConnected(false))
-  }, [])
+  }, [browseDropbox])
 
   // Handle ?dropbox=connected query param after OAuth callback
   useEffect(() => {
@@ -1057,12 +1064,11 @@ export default function CreativesPage() {
           padding: '14px 16px',
           marginBottom: '12px',
           display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          flexWrap: 'wrap',
+          flexDirection: 'column',
+          gap: '10px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <svg width="16" height="16" viewBox="0 0 40 40" fill="none">
             <path d="M10 4L20 10.5L10 17L0 10.5L10 4Z" fill="#0061FF"/>
             <path d="M30 4L40 10.5L30 17L20 10.5L30 4Z" fill="#0061FF"/>
@@ -1097,44 +1103,94 @@ export default function CreativesPage() {
               <Check size={12} /> Conectado
             </span>
 
-            {dropboxFolders.length > 0 ? (
-              <select
-                value={dropboxFolder}
-                onChange={(e) => setDropboxFolder(e.target.value)}
-                style={{ ...selectStyle, fontSize: '12px' }}
-              >
+            {/* Folder browser */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Breadcrumb */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => browseDropbox('')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: dropboxBrowsePath === '' ? 'var(--text-primary)' : 'var(--accent)', padding: 0, fontWeight: '500' }}
+                >
+                  Raiz
+                </button>
+                {dropboxBrowsePath.split('/').filter(Boolean).map((segment, i, arr) => {
+                  const path = '/' + arr.slice(0, i + 1).join('/')
+                  return (
+                    <span key={path} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/</span>
+                      <button
+                        onClick={() => browseDropbox(path)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: i === arr.length - 1 ? 'var(--text-primary)' : 'var(--accent)', padding: 0, fontWeight: i === arr.length - 1 ? '500' : '400' }}
+                      >
+                        {segment}
+                      </button>
+                    </span>
+                  )
+                })}
+                {dropboxBrowseLoading && <Spinner size={12} />}
+              </div>
+
+              {/* Folder list */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                {dropboxBrowsePath !== '' && (
+                  <button
+                    onClick={() => {
+                      const parent = dropboxBrowsePath.split('/').slice(0, -1).join('/') || ''
+                      browseDropbox(parent)
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    ← Voltar
+                  </button>
+                )}
                 {dropboxFolders.map((f) => (
-                  <option key={f.path} value={f.path}>{f.name}</option>
+                  <button
+                    key={f.path}
+                    onClick={() => browseDropbox(f.path)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    📁 {f.name}
+                  </button>
                 ))}
-              </select>
-            ) : (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem pastas na raiz</span>
-            )}
+                {!dropboxBrowseLoading && dropboxFolders.length === 0 && (
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem subpastas</span>
+                )}
+              </div>
 
-            <button
-              onClick={handleSync}
-              disabled={syncing || ads.length === 0 || !dropboxFolder}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                padding: '6px 12px', borderRadius: 'var(--radius-sm)',
-                border: 'none', background: 'var(--accent)', color: 'white',
-                cursor: syncing || ads.length === 0 || !dropboxFolder ? 'not-allowed' : 'pointer',
-                fontSize: '12px', fontWeight: '500',
-                opacity: ads.length === 0 || !dropboxFolder ? 0.5 : 1,
-              }}
-            >
-              {syncing ? <Spinner size={11} /> : <PlaySquare size={12} />}
-              {syncing ? 'Sincronizando...' : 'Sincronizar vídeos'}
-            </button>
+              {/* Select + sync current path */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setDropboxFolder(dropboxBrowsePath)}
+                  style={{ padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--bg-border)'}`, background: dropboxFolder === dropboxBrowsePath ? 'rgba(91,110,245,0.1)' : 'transparent', color: dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
+                >
+                  {dropboxFolder === dropboxBrowsePath ? '✓ Pasta selecionada' : 'Usar esta pasta'}
+                </button>
 
-            {syncResult && (
-              <span style={{ fontSize: '12px', color: 'var(--status-success)' }}>
-                {syncResult.matched} de {syncResult.total} arquivos vinculados
-              </span>
-            )}
-            {syncError && (
-              <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{syncError}</span>
-            )}
+                {dropboxFolder !== '' && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {dropboxFolder === '' ? 'Raiz' : dropboxFolder}
+                  </span>
+                )}
+
+                <button
+                  onClick={handleSync}
+                  disabled={syncing || ads.length === 0 || dropboxFolder === ''}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: syncing || ads.length === 0 || dropboxFolder === '' ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: '500', opacity: ads.length === 0 || dropboxFolder === '' ? 0.5 : 1 }}
+                >
+                  {syncing ? <Spinner size={11} /> : <PlaySquare size={12} />}
+                  {syncing ? 'Sincronizando...' : 'Sincronizar vídeos'}
+                </button>
+
+                {syncResult && (
+                  <span style={{ fontSize: '12px', color: 'var(--status-success)' }}>
+                    {syncResult.matched} de {syncResult.total} vinculados
+                  </span>
+                )}
+                {syncError && (
+                  <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{syncError}</span>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>
