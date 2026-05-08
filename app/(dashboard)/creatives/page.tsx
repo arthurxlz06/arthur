@@ -1055,7 +1055,17 @@ export default function CreativesPage() {
       } else {
         const fetched = data.ads ?? []
         const fetchedAt = data.cached_at ?? new Date().toISOString()
-        setAds(fetched)
+        if (forceRefresh) {
+          // Atualizar: mantém existentes, atualiza métricas, adiciona novos
+          setAds((prev) => {
+            const map = new Map(prev.map((a) => [a.ad_name, a]))
+            for (const ad of fetched) map.set(ad.ad_name, ad)
+            return Array.from(map.values())
+          })
+        } else {
+          // Buscar: substitui tudo
+          setAds(fetched)
+        }
         if (data.warning) setAdsWarning(data.warning)
         localStorage.setItem(adsCache(selectedAccount, since, until), JSON.stringify({ ads: fetched, fetchedAt }))
         localStorage.setItem(QUERY_KEY, JSON.stringify({ accountId: selectedAccount, since, until }))
