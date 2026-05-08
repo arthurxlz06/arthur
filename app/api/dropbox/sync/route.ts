@@ -78,7 +78,12 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
       }),
     }
   )
-  const data = await res.json() as DropboxSharedLink
+  let data: DropboxSharedLink
+  try {
+    data = await res.json() as DropboxSharedLink
+  } catch {
+    return null
+  }
   return (
     data.url ??
     data.shared_link_already_exists?.metadata?.url ??
