@@ -1115,23 +1115,42 @@ export default function CreativesPage() {
           gap: '12px',
         }}
       >
-        <div>
-          <h1
-            style={{
-              fontSize: '24px',
-              fontWeight: '600',
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.03em',
-              marginBottom: '4px',
-            }}
-          >
-            Criativos
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-            {ads.length > 0
-              ? `${sorted.length} de ${ads.length} criativos`
-              : 'Selecione uma conta e período para carregar'}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div>
+            <h1
+              style={{
+                fontSize: '24px',
+                fontWeight: '600',
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.03em',
+                marginBottom: '4px',
+              }}
+            >
+              Criativos
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              {ads.length > 0
+                ? `${sorted.length} de ${ads.length} criativos`
+                : 'Selecione uma conta e período para carregar'}
+            </p>
+          </div>
+          {ads.length > 0 && (
+            <button
+              onClick={() => fetchAds(true)}
+              disabled={loadingAds}
+              title="Atualizar métricas e buscar criativos novos"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '34px', height: '34px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none', background: 'var(--accent)', color: 'white',
+                cursor: loadingAds ? 'wait' : 'pointer',
+                opacity: loadingAds ? 0.6 : 1, flexShrink: 0,
+              }}
+            >
+              <RefreshCw size={15} style={{ animation: loadingAds ? 'spin 0.8s linear infinite' : 'none' }} />
+            </button>
+          )}
         </div>
         <button
           onClick={() => setShowCsvModal(true)}
@@ -1355,22 +1374,6 @@ export default function CreativesPage() {
           Buscar
         </button>
 
-        <button
-          onClick={() => fetchAds(true)}
-          disabled={loadingAds || !selectedAccount}
-          title="Atualizar métricas (ignorar cache)"
-          style={{
-            marginLeft: 'auto',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '36px', height: '36px',
-            borderRadius: 'var(--radius-sm)',
-            border: 'none', background: 'var(--accent)', color: 'white',
-            cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
-            opacity: !selectedAccount ? 0.5 : 1, flexShrink: 0,
-          }}
-        >
-          <RefreshCw size={15} style={{ animation: loadingAds ? 'spin 0.8s linear infinite' : 'none' }} />
-        </button>
       </div>
 
       {/* Search bar — filtro por nome do anúncio */}
