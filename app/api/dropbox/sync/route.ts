@@ -17,13 +17,22 @@ interface DropboxSharedLink {
 function normalizeForMatch(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\.[^/.]+$/, '')         // remove extensão
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
-    .replace(/[\[\](){}]/g, ' ')      // colchetes/parênteses → espaço
-    .replace(/[_\-\.]/g, ' ')         // underscore/hífen/ponto → espaço
-    .replace(/[^a-z0-9 ]/g, '')       // remove qualquer outro especial
+    .replace(/\.[^/.]+$/, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[\[\](){}]/g, ' ')
+    .replace(/[_\-\.]/g, ' ')
+    .replace(/[^a-z0-9 ]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function tokenize(norm: string): string[] {
+  return norm.split(' ').filter((w) => w.length >= 2)
+}
+
+function sharedTokenCount(a: string, b: string): number {
+  const setB = new Set(tokenize(b))
+  return tokenize(a).filter((t) => setB.has(t)).length
 }
 
 function convertSharedLinkToEmbed(url: string): string {
@@ -141,16 +150,27 @@ export async function POST(req: Request) {
 
     for (const file of files) {
       const fileNorm = normalizeForMatch(file.name)
+      const fileTokens = tokenize(fileNorm)
+      if (fileTokens.length === 0) continue
 
-      // 1ª tentativa: match exato após normalização
+      // 1ª: match exato
       let matchedAd = normalizedAds.find((a) => a.norm === fileNorm)?.original
 
-      // 2ª tentativa: match parcial — o nome do arquivo contém o nome do criativo ou vice-versa
+      // 2ª: um contém o outro inteiramente
       if (!matchedAd) {
-        matchedAd = normalizedAds.find((a) => {
-          if (!a.norm || !fileNorm) return false
-          return fileNorm.includes(a.norm) || a.norm.includes(fileNorm)
-        })?.original
+        matchedAd = normalizedAds.find((a) =>
+          fileNorm.includes(a.norm) || a.norm.includes(fileNorm)
+        )?.original
+      }
+
+      // 3ª: maior sobreposição de tokens — precisa que TODOS os tokens do arquivo
+      //     apareçam no nome do criativo (arquivo é o subconjunto de palavras)
+      if (!matchedAd) {
+        const byOverlap = normalizedAds
+          .map((a) => ({ original: a.original, shared: sharedTokenCount(fileNorm, a.norm) }))
+          .filter((a) => a.shared >= fileTokens.length) // todos os tokens do arquivo batem
+          .sort((a, b) => b.shared - a.shared)
+        if (byOverlap.length > 0) matchedAd = byOverlap[0].original
       }
 
       if (!matchedAd) continue
