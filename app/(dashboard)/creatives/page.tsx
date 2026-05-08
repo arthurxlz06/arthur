@@ -766,6 +766,9 @@ interface SavedFilterSet {
 }
 
 const LS_KEY = 'creatives_saved_filters'
+const QUERY_KEY = 'creatives_query'
+const adsCache = (accountId: string, since: string, until: string) =>
+  `creatives_data_${accountId}_${since}_${until}`
 
 const DEFAULT_FILTERS: Filters = {
   search: '',
@@ -781,13 +784,22 @@ export default function CreativesPage() {
   const [accounts, setAccounts] = useState<AdAccount[]>([])
   const [selectedAccount, setSelectedAccount] = useState('')
   const [since, setSince] = useState(() => {
-    const d = new Date()
-    d.setDate(1)
-    return d.toISOString().slice(0, 10)
+    try {
+      const q = JSON.parse(localStorage.getItem(QUERY_KEY) ?? '{}') as { since?: string }
+      if (q.since) return q.since
+    } catch {}
+    const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
   })
-  const [until, setUntil] = useState(() => new Date().toISOString().slice(0, 10))
+  const [until, setUntil] = useState(() => {
+    try {
+      const q = JSON.parse(localStorage.getItem(QUERY_KEY) ?? '{}') as { until?: string }
+      if (q.until) return q.until
+    } catch {}
+    return new Date().toISOString().slice(0, 10)
+  })
 
   const [ads, setAds] = useState<AdMetrics[]>([])
+  const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null)
   const [links, setLinks] = useState<CreativeLink[]>([])
   const [loadingAds, setLoadingAds] = useState(false)
   const [adsError, setAdsError] = useState('')
@@ -919,16 +931,42 @@ export default function CreativesPage() {
     }
   }
 
-  // Load selected ad accounts
+  const loadFromCache = useCallback((accountId: string, s: string, u: string) => {
+    try {
+      const raw = localStorage.getItem(adsCache(accountId, s, u))
+      if (!raw) { setAds([]); setLastFetchedAt(null); return false }
+      const { ads: cached, fetchedAt } = JSON.parse(raw) as { ads: AdMetrics[]; fetchedAt: string }
+      setAds(cached)
+      setLastFetchedAt(fetchedAt)
+      return true
+    } catch { return false }
+  }, [])
+
+  // Load selected ad accounts — restore saved account + cache on mount
   useEffect(() => {
     fetch('/api/accounts/selected')
       .then((r) => r.json())
       .then((data: { accounts?: AdAccount[] }) => {
         const list = data.accounts ?? []
         setAccounts(list)
-        if (list.length > 0) setSelectedAccount(list[0].meta_account_id)
+        if (list.length === 0) return
+        try {
+          const q = JSON.parse(localStorage.getItem(QUERY_KEY) ?? '{}') as { accountId?: string; since?: string; until?: string }
+          const savedAccount = q.accountId && list.find((a) => a.meta_account_id === q.accountId)
+            ? q.accountId
+            : list[0].meta_account_id
+          setSelectedAccount(savedAccount)
+          const s = q.since ?? since
+          const u = q.until ?? until
+          setSince(s)
+          setUntil(u)
+          loadFromCache(savedAccount, s, u)
+        } catch {
+          setSelectedAccount(list[0].meta_account_id)
+        }
       })
       .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Load Dropbox links
@@ -940,7 +978,22 @@ export default function CreativesPage() {
 
   useEffect(() => { fetchLinks() }, [fetchLinks])
 
-  // Fetch ads
+  const handleAccountChange = (accountId: string) => {
+    setSelectedAccount(accountId)
+    loadFromCache(accountId, since, until)
+  }
+
+  const handleSinceChange = (val: string) => {
+    setSince(val)
+    loadFromCache(selectedAccount, val, until)
+  }
+
+  const handleUntilChange = (val: string) => {
+    setUntil(val)
+    loadFromCache(selectedAccount, since, val)
+  }
+
+  // Fetch ads — salva no cache após buscar
   const fetchAds = useCallback(async () => {
     if (!selectedAccount) return
     setLoadingAds(true)
@@ -951,9 +1004,13 @@ export default function CreativesPage() {
       const data = await res.json() as { ads?: AdMetrics[]; error?: string }
       if (data.error) {
         setAdsError(data.error)
-        setAds([])
       } else {
-        setAds(data.ads ?? [])
+        const fetched = data.ads ?? []
+        const fetchedAt = new Date().toISOString()
+        setAds(fetched)
+        setLastFetchedAt(fetchedAt)
+        localStorage.setItem(adsCache(selectedAccount, since, until), JSON.stringify({ ads: fetched, fetchedAt }))
+        localStorage.setItem(QUERY_KEY, JSON.stringify({ accountId: selectedAccount, since, until }))
       }
     } catch {
       setAdsError('Erro ao buscar métricas')
@@ -1226,7 +1283,7 @@ export default function CreativesPage() {
           <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>Conta</label>
           <select
             value={selectedAccount}
-            onChange={(e) => setSelectedAccount(e.target.value)}
+            onChange={(e) => handleAccountChange(e.target.value)}
             style={selectStyle}
           >
             {accounts.length === 0 && <option value="">Nenhuma conta selecionada</option>}
@@ -1242,7 +1299,7 @@ export default function CreativesPage() {
           <input
             type="date"
             value={since}
-            onChange={(e) => setSince(e.target.value)}
+            onChange={(e) => handleSinceChange(e.target.value)}
             style={inputStyle}
           />
         </div>
@@ -1251,32 +1308,39 @@ export default function CreativesPage() {
           <input
             type="date"
             value={until}
-            onChange={(e) => setUntil(e.target.value)}
+            onChange={(e) => handleUntilChange(e.target.value)}
             style={inputStyle}
           />
         </div>
 
-        <button
-          onClick={fetchAds}
-          disabled={loadingAds || !selectedAccount}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            padding: '8px 16px',
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            background: 'var(--accent)',
-            color: 'white',
-            cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
-            fontSize: '13px',
-            fontWeight: '500',
-            opacity: !selectedAccount ? 0.5 : 1,
-          }}
-        >
-          {loadingAds ? <Spinner size={12} /> : null}
-          Buscar
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <button
+            onClick={fetchAds}
+            disabled={loadingAds || !selectedAccount}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: 'white',
+              cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              fontWeight: '500',
+              opacity: !selectedAccount ? 0.5 : 1,
+            }}
+          >
+            {loadingAds ? <Spinner size={12} /> : null}
+            {ads.length > 0 ? 'Atualizar' : 'Buscar'}
+          </button>
+          {lastFetchedAt && (
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              {new Date(lastFetchedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Search bar — filtro por nome do anúncio */}
