@@ -14,28 +14,20 @@ interface DropboxSharedLink {
   shared_link_already_exists?: { metadata?: { url: string } }
 }
 
-function normalizeForMatch(name: string): string {
+function toWords(name: string): string[] {
   return name
     .toLowerCase()
-    .replace(/\.[^/.]+$/, '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[\[\](){}]/g, ' ')
-    .replace(/[_\-\.]/g, ' ')
-    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\.[^/.]+$/, '')          // remove extensão
+    .replace(/[_\-\.\[\](){}]/g, ' ')  // separadores → espaço
     .replace(/\s+/g, ' ')
     .trim()
+    .split(' ')
+    .filter((w) => w.length >= 3)
 }
 
-// Palavras com >= 5 letras são "significativas" — suficientemente específicas para match
-function significantTokens(norm: string): string[] {
-  return norm.split(' ').filter((w) => w.length >= 5)
-}
-
-// Basta 1 token significativo em comum para considerar match
-function hasSignificantOverlap(a: string, b: string): boolean {
-  const tokA = significantTokens(a)
-  const setB = new Set(b.split(' '))
-  return tokA.some((t) => setB.has(t))
+function wordsOverlap(a: string[], b: string[]): boolean {
+  const setB = new Set(b.filter((w) => w.length >= 5))
+  return a.some((w) => w.length >= 5 && setB.has(w))
 }
 
 function convertSharedLinkToEmbed(url: string): string {
@@ -149,31 +141,29 @@ export async function POST(req: Request) {
     const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
 
     // Filtra arquivos do Dropbox pelo name_filter se fornecido
-    const filterNorm = name_filter ? normalizeForMatch(name_filter) : ''
-    const filesToMatch = filterNorm
-      ? files.filter((f) => normalizeForMatch(f.name).includes(filterNorm))
+    const filterKeyword = (name_filter ?? '').toLowerCase().trim()
+    const filesToMatch = filterKeyword
+      ? files.filter((f) => f.name.toLowerCase().includes(filterKeyword))
       : files
 
-    // Pré-normaliza os ad_names para não repetir o cálculo no loop
-    const normalizedAds = ad_names.map((n) => ({ original: n, norm: normalizeForMatch(n) }))
+    // Pré-processa os ad_names
+    const processedAds = ad_names.map((n) => ({ original: n, words: toWords(n) }))
 
     for (const file of filesToMatch) {
-      const fileNorm = normalizeForMatch(file.name)
-      if (!fileNorm) continue
+      const fileWords = toWords(file.name)
+      if (fileWords.length === 0) continue
 
-      // 1ª: match exato
-      let matchedAd = normalizedAds.find((a) => a.norm === fileNorm)?.original
+      // Encontra o ad_name que tem mais palavras significativas em comum
+      let matchedAd: string | undefined
 
-      // 2ª: um contém o outro inteiramente
+      // 1ª: match exato de palavras
+      matchedAd = processedAds.find((a) =>
+        fileWords.join(' ') === a.words.join(' ')
+      )?.original
+
+      // 2ª: overlap de palavras significativas (>= 5 letras)
       if (!matchedAd) {
-        matchedAd = normalizedAds.find((a) =>
-          fileNorm.includes(a.norm) || a.norm.includes(fileNorm)
-        )?.original
-      }
-
-      // 3ª: pelo menos 1 palavra significativa (>= 5 letras) em comum
-      if (!matchedAd) {
-        matchedAd = normalizedAds.find((a) => hasSignificantOverlap(fileNorm, a.norm))?.original
+        matchedAd = processedAds.find((a) => wordsOverlap(fileWords, a.words))?.original
       }
 
       if (!matchedAd) continue
