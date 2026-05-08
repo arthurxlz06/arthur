@@ -804,10 +804,19 @@ export default function CreativesPage() {
   const [loadingAds, setLoadingAds] = useState(false)
   const [adsError, setAdsError] = useState('')
 
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<Filters>(() => {
+    try { return JSON.parse(localStorage.getItem('creatives_ui') ?? '{}').filters ?? DEFAULT_FILTERS }
+    catch { return DEFAULT_FILTERS }
+  })
   const [showFilters, setShowFilters] = useState(false)
-  const [sortField, setSortField] = useState<SortField>('roas')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [sortField, setSortField] = useState<SortField>(() => {
+    try { return JSON.parse(localStorage.getItem('creatives_ui') ?? '{}').sortField ?? 'roas' }
+    catch { return 'roas' }
+  })
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    try { return JSON.parse(localStorage.getItem('creatives_ui') ?? '{}').sortDir ?? 'desc' }
+    catch { return 'desc' }
+  })
 
   const [savedFilterSets, setSavedFilterSets] = useState<SavedFilterSet[]>([])
   const [saveFilterName, setSaveFilterName] = useState('')
@@ -819,14 +828,30 @@ export default function CreativesPage() {
   // Dropbox
   const [dropboxConnected, setDropboxConnected] = useState<boolean | null>(null)
   const [dropboxFolders, setDropboxFolders] = useState<{ name: string; path: string }[]>([])
-  const [dropboxBrowsePath, setDropboxBrowsePath] = useState('')
+  const [dropboxBrowsePath, setDropboxBrowsePath] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('creatives_dropbox') ?? '{}').browsePath ?? '' }
+    catch { return '' }
+  })
   const [dropboxBrowseLoading, setDropboxBrowseLoading] = useState(false)
-  const [dropboxFolder, setDropboxFolder] = useState('')
+  const [dropboxFolder, setDropboxFolder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('creatives_dropbox') ?? '{}').folder ?? '' }
+    catch { return '' }
+  })
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
 
-  // Load saved filters from localStorage
+  // Persiste filtros + sort sempre que mudam
+  useEffect(() => {
+    localStorage.setItem('creatives_ui', JSON.stringify({ filters, sortField, sortDir }))
+  }, [filters, sortField, sortDir])
+
+  // Persiste pasta Dropbox sempre que muda
+  useEffect(() => {
+    localStorage.setItem('creatives_dropbox', JSON.stringify({ folder: dropboxFolder, browsePath: dropboxBrowsePath }))
+  }, [dropboxFolder, dropboxBrowsePath])
+
+  // Load saved filter sets from localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY)
@@ -882,13 +907,17 @@ export default function CreativesPage() {
     }
   }, [])
 
-  // Check Dropbox connection + load root folders
+  // Check Dropbox connection — restaura o browse path salvo
   useEffect(() => {
+    const savedPath = (() => {
+      try { return JSON.parse(localStorage.getItem('creatives_dropbox') ?? '{}').browsePath ?? '' }
+      catch { return '' }
+    })()
     fetch('/api/dropbox/status')
       .then((r) => r.json())
       .then((d: { connected?: boolean }) => {
         setDropboxConnected(d.connected ?? false)
-        if (d.connected) browseDropbox('')
+        if (d.connected) browseDropbox(savedPath)
       })
       .catch(() => setDropboxConnected(false))
   }, [browseDropbox])
@@ -1181,7 +1210,7 @@ export default function CreativesPage() {
                 >
                   Raiz
                 </button>
-                {dropboxBrowsePath.split('/').filter(Boolean).map((segment, i, arr) => {
+                {dropboxBrowsePath.split('/').filter(Boolean).map((segment: string, i: number, arr: string[]) => {
                   const path = '/' + arr.slice(0, i + 1).join('/')
                   return (
                     <span key={path} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
