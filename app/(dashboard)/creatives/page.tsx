@@ -1301,7 +1301,7 @@ export default function CreativesPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {filters.search.trim() && (
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Sincronizando criativos com "{filters.search}"
+                    Sincronizando criativos com &quot;{filters.search}&quot;
                   </span>
                 )}
 
