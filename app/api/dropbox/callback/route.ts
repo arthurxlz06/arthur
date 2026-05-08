@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const error = searchParams.get('error')
 
   if (error || !code) {
-    return NextResponse.redirect(`${baseUrl}/creatives?dropbox=error`)
+    return NextResponse.redirect(`${baseUrl}/settings?dropbox=error`)
   }
 
   const tokenRes = await fetch('https://api.dropboxapi.com/oauth2/token', {
@@ -48,5 +48,5 @@ export async function GET(req: Request) {
     })
     .eq('email', session.user.email)
 
-  return NextResponse.redirect(`${baseUrl}/creatives?dropbox=connected`)
+  return NextResponse.redirect(`${baseUrl}/settings?dropbox=connected`)
 }

@@ -112,6 +112,12 @@ export default function SettingsPage() {
   const [dropboxStatus, setDropboxStatus] = useState<Status>('loading')
   const [metaDisconnecting, setMetaDisconnecting] = useState(false)
   const [dropboxDisconnecting, setDropboxDisconnecting] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 4000)
+  }
 
   useEffect(() => {
     fetch('/api/meta/status')
@@ -123,9 +129,20 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((d: { connected?: boolean }) => setDropboxStatus(d.connected ? 'connected' : 'disconnected'))
       .catch(() => setDropboxStatus('disconnected'))
+
+    // Handle OAuth callback result
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('dropbox') === 'connected') {
+      setDropboxStatus('connected')
+      showToast('Dropbox conectado com sucesso!', true)
+      window.history.replaceState({}, '', '/settings')
+    } else if (p.get('dropbox') === 'error') {
+      showToast('Erro ao conectar o Dropbox. Tente novamente.', false)
+      window.history.replaceState({}, '', '/settings')
+    }
   }, [])
 
-  const handleMetaConnect = () => signIn('facebook')
+  const handleMetaConnect = () => signIn('facebook', { callbackUrl: '/settings' })
 
   const handleMetaDisconnect = async () => {
     setMetaDisconnecting(true)
@@ -147,6 +164,22 @@ export default function SettingsPage() {
 
   return (
     <div>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 200,
+          padding: '12px 18px', borderRadius: 'var(--radius-md)',
+          background: toast.ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+          border: `1px solid ${toast.ok ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+          color: toast.ok ? 'var(--status-success)' : 'var(--status-error)',
+          fontSize: '13px', fontWeight: '500',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          {toast.ok ? <Check size={14} /> : <AlertCircle size={14} />}
+          {toast.msg}
+        </div>
+      )}
+
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.03em', marginBottom: '4px' }}>
           Configurações
