@@ -842,6 +842,12 @@ export default function CreativesPage() {
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
 
+  // Seletor manual de arquivo Dropbox por criativo
+  const [pickingFor, setPickingFor] = useState<string | null>(null)
+  const [dropboxFiles, setDropboxFiles] = useState<{ name: string; path: string }[]>([])
+  const [dropboxFilesLoading, setDropboxFilesLoading] = useState(false)
+  const [fileSearch, setFileSearch] = useState('')
+
   // Persiste filtros + sort sempre que mudam
   useEffect(() => {
     localStorage.setItem('creatives_ui', JSON.stringify({ filters, sortField, sortDir }))
@@ -1097,6 +1103,35 @@ export default function CreativesPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ad_name: adName, dropbox_url: url }),
+    })
+    await fetchLinks()
+  }
+
+  const openPicker = async (adName: string) => {
+    if (dropboxConnected && dropboxFolder) {
+      setPickingFor(adName)
+      setFileSearch('')
+      if (dropboxFiles.length === 0) {
+        setDropboxFilesLoading(true)
+        try {
+          const res = await fetch(`/api/dropbox/link?path=${encodeURIComponent(dropboxFolder)}`)
+          const data = await res.json() as { files?: { name: string; path: string }[] }
+          setDropboxFiles(data.files ?? [])
+        } catch { /* ignora */ } finally {
+          setDropboxFilesLoading(false)
+        }
+      }
+    } else {
+      setLinkModal(adName)
+    }
+  }
+
+  const handlePickFile = async (adName: string, filePath: string) => {
+    setPickingFor(null)
+    await fetch('/api/dropbox/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_path: filePath, ad_name: adName }),
     })
     await fetchLinks()
   }
@@ -1678,7 +1713,7 @@ export default function CreativesPage() {
             <CreativeCard
               key={c.ad_id}
               creative={c}
-              onLink={(adName) => setLinkModal(adName)}
+              onLink={(adName) => openPicker(adName)}
             />
           ))}
         </div>
@@ -1716,6 +1751,87 @@ export default function CreativesPage() {
           onClose={() => setShowCsvModal(false)}
           onImport={handleCsvImport}
         />
+      )}
+
+      {/* Dropbox file picker */}
+      {pickingFor !== null && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setPickingFor(null)}
+        >
+          <div
+            style={{
+              background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--bg-border)', width: '480px', maxWidth: '95vw',
+              maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Selecionar vídeo do Dropbox</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', maxWidth: '360px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickingFor}</div>
+              </div>
+              <button onClick={() => setPickingFor(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--bg-border)' }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Buscar arquivo..."
+                value={fileSearch}
+                onChange={(e) => setFileSearch(e.target.value)}
+                style={{
+                  width: '100%', padding: '7px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: '13px', outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* File list */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {dropboxFilesLoading && (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  Carregando arquivos...
+                </div>
+              )}
+              {!dropboxFilesLoading && dropboxFiles.length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  Nenhum arquivo encontrado na pasta selecionada.
+                </div>
+              )}
+              {!dropboxFilesLoading && dropboxFiles
+                .filter((f) => f.name.toLowerCase().includes(fileSearch.toLowerCase()))
+                .map((f) => (
+                  <button
+                    key={f.path}
+                    onClick={() => handlePickFile(pickingFor!, f.path)}
+                    style={{
+                      width: '100%', textAlign: 'left', padding: '10px 16px',
+                      background: 'none', border: 'none', borderBottom: '1px solid var(--bg-border)',
+                      cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  >
+                    {f.name}
+                  </button>
+                ))
+              }
+            </div>
+          </div>
+        </div>
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
