@@ -800,6 +800,7 @@ export default function CreativesPage() {
 
   const [ads, setAds] = useState<AdMetrics[]>([])
   const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null)
+  const [adsWarning, setAdsWarning] = useState('')
   const [links, setLinks] = useState<CreativeLink[]>([])
   const [loadingAds, setLoadingAds] = useState(false)
   const [adsError, setAdsError] = useState('')
@@ -1024,22 +1025,25 @@ export default function CreativesPage() {
     loadFromCache(selectedAccount, since, val)
   }
 
-  // Fetch ads — salva no cache após buscar
+  // Fetch ads — usa refresh=1 quando já há dados (força ignorar cache do servidor)
   const fetchAds = useCallback(async () => {
     if (!selectedAccount) return
     setLoadingAds(true)
     setAdsError('')
+    setAdsWarning('')
     try {
       const params = new URLSearchParams({ account_id: selectedAccount, since, until })
+      if (ads.length > 0) params.set('refresh', '1')
       const res = await fetch(`/api/creatives/metrics?${params}`)
-      const data = await res.json() as { ads?: AdMetrics[]; error?: string }
+      const data = await res.json() as { ads?: AdMetrics[]; error?: string; warning?: string; cached_at?: string }
       if (data.error) {
         setAdsError(data.error)
       } else {
         const fetched = data.ads ?? []
-        const fetchedAt = new Date().toISOString()
+        const fetchedAt = data.cached_at ?? new Date().toISOString()
         setAds(fetched)
         setLastFetchedAt(fetchedAt)
+        if (data.warning) setAdsWarning(data.warning)
         localStorage.setItem(adsCache(selectedAccount, since, until), JSON.stringify({ ads: fetched, fetchedAt }))
         localStorage.setItem(QUERY_KEY, JSON.stringify({ accountId: selectedAccount, since, until }))
       }
@@ -1048,7 +1052,7 @@ export default function CreativesPage() {
     } finally {
       setLoadingAds(false)
     }
-  }, [selectedAccount, since, until])
+  }, [selectedAccount, since, until, ads.length])
 
   // Build creatives = merge ads + links
   const creatives: Creative[] = ads.map((ad) => ({
@@ -1586,6 +1590,13 @@ export default function CreativesPage() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Warning (rate limit com fallback de cache) */}
+      {adsWarning && (
+        <div style={{ padding: '10px 16px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 'var(--radius-md)', color: '#b45309', fontSize: '13px', marginBottom: '12px' }}>
+          {adsWarning}
         </div>
       )}
 
