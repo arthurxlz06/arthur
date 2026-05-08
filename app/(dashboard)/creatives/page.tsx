@@ -917,7 +917,9 @@ export default function CreativesPage() {
           ad_names: ads.map((a) => a.ad_name),
         }),
       })
-      const data = await res.json() as { matched?: number; total_files?: number; error?: string }
+      const text = await res.text()
+      let data: { matched?: number; total_files?: number; error?: string }
+      try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
         setSyncError(data.error)
       } else {
