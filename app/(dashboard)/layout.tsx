@@ -10,6 +10,7 @@ import {
   Radio,
   History,
   Settings,
+  SlidersHorizontal,
   LogOut,
   Zap,
   Menu,
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/publish', icon: Radio, label: 'Publicar' },
   { href: '/history', icon: History, label: 'Histórico' },
   { href: '/creatives', icon: PlaySquare, label: 'Criativos' },
+  { href: '/settings', icon: SlidersHorizontal, label: 'Configurações' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
