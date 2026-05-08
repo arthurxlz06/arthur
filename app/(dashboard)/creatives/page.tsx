@@ -847,14 +847,23 @@ export default function CreativesPage() {
     persistSavedSets(savedFilterSets.filter((s) => s.name !== name))
   }
 
+  const [dropboxBrowseError, setDropboxBrowseError] = useState('')
+
   const browseDropbox = useCallback(async (path: string) => {
     setDropboxBrowseLoading(true)
+    setDropboxBrowseError('')
     try {
       const res = await fetch(`/api/dropbox/sync?path=${encodeURIComponent(path)}`)
-      const data = await res.json() as { folders?: { name: string; path: string }[] }
-      setDropboxFolders(data.folders ?? [])
-      setDropboxBrowsePath(path)
+      const data = await res.json() as { folders?: { name: string; path: string }[]; error?: string }
+      if (data.error) {
+        setDropboxBrowseError(data.error)
+        setDropboxFolders([])
+      } else {
+        setDropboxFolders(data.folders ?? [])
+        setDropboxBrowsePath(path)
+      }
     } catch {
+      setDropboxBrowseError('Erro ao listar pastas')
       setDropboxFolders([])
     } finally {
       setDropboxBrowseLoading(false)
@@ -1152,8 +1161,11 @@ export default function CreativesPage() {
                     📁 {f.name}
                   </button>
                 ))}
-                {!dropboxBrowseLoading && dropboxFolders.length === 0 && (
+                {!dropboxBrowseLoading && dropboxFolders.length === 0 && !dropboxBrowseError && (
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem subpastas</span>
+                )}
+                {dropboxBrowseError && (
+                  <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{dropboxBrowseError}</span>
                 )}
               </div>
 

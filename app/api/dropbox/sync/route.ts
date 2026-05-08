@@ -169,9 +169,10 @@ export async function GET(req: Request) {
   if (!session?.user?.email)
     return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-  const { data: user } = await getSupabaseAdmin()
+  const supabase = getSupabaseAdmin()
+  const { data: user } = await supabase
     .from('users')
-    .select('dropbox_access_token')
+    .select('id, dropbox_access_token, dropbox_refresh_token')
     .eq('email', session.user.email)
     .single()
 
@@ -181,16 +182,28 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const path = searchParams.get('path') ?? ''
 
-  const res = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${user.dropbox_access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ path, recursive: false }),
-  })
+  let token = user.dropbox_access_token as string
 
-  const data = await res.json() as { entries?: DropboxEntry[]; error_summary?: string }
+  const tryList = async (t: string) => {
+    const res = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, recursive: false }),
+    })
+    return res.json() as Promise<{ entries?: DropboxEntry[]; error_summary?: string }>
+  }
+
+  let data = await tryList(token)
+
+  // Token expirado — tenta refresh
+  if (data.error_summary && user.dropbox_refresh_token) {
+    const newToken = await refreshDropboxToken(user.dropbox_refresh_token as string)
+    if (newToken) {
+      token = newToken
+      await supabase.from('users').update({ dropbox_access_token: newToken }).eq('id', user.id)
+      data = await tryList(token)
+    }
+  }
 
   if (data.error_summary) {
     return NextResponse.json({ error: data.error_summary }, { status: 500 })
