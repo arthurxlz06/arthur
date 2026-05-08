@@ -957,8 +957,9 @@ export default function CreativesPage() {
         const total = data.total_files ?? 0
         setSyncResult({ matched, total })
         if (matched === 0 && total > 0 && data.debug_sample) {
-          const sample = data.debug_sample.map((s) => `"${s.original}" → "${s.normalized}"`).join('\n')
-          setSyncError(`Nenhum arquivo bateu com os criativos. Amostra dos arquivos no Dropbox:\n${sample}\n\nOs criativos esperam nomes como:\n"${ads[0]?.ad_name}"`)
+          const fileSample = data.debug_sample.map((s) => `  "${s.original}"`).join('\n')
+          const adSample = ads.slice(0, 8).map((a) => `  "${a.ad_name}"`).join('\n')
+          setSyncError(`0 de ${total} arquivos bateram.\n\nArquivos no Dropbox:\n${fileSample}\n\nCriativos na Meta (primeiros 8):\n${adSample}`)
         }
         await fetchLinks()
       }
