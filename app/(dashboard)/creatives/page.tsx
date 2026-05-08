@@ -948,12 +948,18 @@ export default function CreativesPage() {
         }),
       })
       const text = await res.text()
-      let data: { matched?: number; total_files?: number; error?: string }
+      let data: { matched?: number; total_files?: number; error?: string; debug_sample?: { original: string; normalized: string }[] }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
         setSyncError(data.error)
       } else {
-        setSyncResult({ matched: data.matched ?? 0, total: data.total_files ?? 0 })
+        const matched = data.matched ?? 0
+        const total = data.total_files ?? 0
+        setSyncResult({ matched, total })
+        if (matched === 0 && total > 0 && data.debug_sample) {
+          const sample = data.debug_sample.map((s) => `"${s.original}" → "${s.normalized}"`).join('\n')
+          setSyncError(`Nenhum arquivo bateu com os criativos. Amostra dos arquivos no Dropbox:\n${sample}\n\nOs criativos esperam nomes como:\n"${ads[0]?.ad_name}"`)
+        }
         await fetchLinks()
       }
     } catch {

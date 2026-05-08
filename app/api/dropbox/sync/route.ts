@@ -17,8 +17,11 @@ interface DropboxSharedLink {
 function normalizeForMatch(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\.[^/.]+$/, '')   // remove extensão
-    .replace(/[_\-]/g, ' ')     // underscore/hífen → espaço
+    .replace(/\.[^/.]+$/, '')         // remove extensão
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+    .replace(/[\[\](){}]/g, ' ')      // colchetes/parênteses → espaço
+    .replace(/[_\-\.]/g, ' ')         // underscore/hífen/ponto → espaço
+    .replace(/[^a-z0-9 ]/g, '')       // remove qualquer outro especial
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -133,9 +136,23 @@ export async function POST(req: Request) {
 
     const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
 
+    // Pré-normaliza os ad_names para não repetir o cálculo no loop
+    const normalizedAds = ad_names.map((n) => ({ original: n, norm: normalizeForMatch(n) }))
+
     for (const file of files) {
       const fileNorm = normalizeForMatch(file.name)
-      const matchedAd = ad_names.find((adName) => normalizeForMatch(adName) === fileNorm)
+
+      // 1ª tentativa: match exato após normalização
+      let matchedAd = normalizedAds.find((a) => a.norm === fileNorm)?.original
+
+      // 2ª tentativa: match parcial — o nome do arquivo contém o nome do criativo ou vice-versa
+      if (!matchedAd) {
+        matchedAd = normalizedAds.find((a) => {
+          if (!a.norm || !fileNorm) return false
+          return fileNorm.includes(a.norm) || a.norm.includes(fileNorm)
+        })?.original
+      }
+
       if (!matchedAd) continue
 
       const sharedUrl = await getOrCreateSharedLink(token, file.path_lower)
@@ -157,10 +174,17 @@ export async function POST(req: Request) {
       )
     }
 
+    // Amostra de debug: primeiros 5 arquivos e como normalizam
+    const sample = files.slice(0, 5).map((f) => ({
+      original: f.name,
+      normalized: normalizeForMatch(f.name),
+    }))
+
     return NextResponse.json({
       matched: matches.length,
       total_files: files.length,
       matches: matches.map((m) => m.ad_name),
+      debug_sample: sample,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
