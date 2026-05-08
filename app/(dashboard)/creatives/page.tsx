@@ -951,7 +951,7 @@ export default function CreativesPage() {
         }),
       })
       const text = await res.text()
-      let data: { matched?: number; total_files?: number; error?: string; debug_sample?: { original: string; normalized: string }[] }
+      let data: { matched?: number; total_files?: number; error?: string; debug_files?: string[]; debug_ads?: string[] }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
         setSyncError(data.error)
@@ -959,10 +959,10 @@ export default function CreativesPage() {
         const matched = data.matched ?? 0
         const total = data.total_files ?? 0
         setSyncResult({ matched, total })
-        if (matched === 0 && total > 0 && data.debug_sample) {
-          const fileSample = data.debug_sample.map((s) => `  "${s.original}"`).join('\n')
-          const adSample = ads.slice(0, 8).map((a) => `  "${a.ad_name}"`).join('\n')
-          setSyncError(`0 de ${total} arquivos bateram.\n\nArquivos no Dropbox:\n${fileSample}\n\nCriativos na Meta (primeiros 8):\n${adSample}`)
+        if (matched === 0 && total > 0) {
+          const fileSample = (data.debug_files ?? []).map((s) => `  "${s}"`).join('\n')
+          const adSample = (data.debug_ads ?? []).map((s) => `  "${s}"`).join('\n')
+          setSyncError(`0 de ${total} arquivos bateram.\n\nArquivos no Dropbox:\n${fileSample}\n\nCriativos enviados ao sync:\n${adSample}`)
         }
         await fetchLinks()
       }

@@ -26,13 +26,16 @@ function normalizeForMatch(name: string): string {
     .trim()
 }
 
-function tokenize(norm: string): string[] {
-  return norm.split(' ').filter((w) => w.length >= 2)
+// Palavras com >= 5 letras são "significativas" — suficientemente específicas para match
+function significantTokens(norm: string): string[] {
+  return norm.split(' ').filter((w) => w.length >= 5)
 }
 
-function sharedTokenCount(a: string, b: string): number {
-  const setB = new Set(tokenize(b))
-  return tokenize(a).filter((t) => setB.has(t)).length
+// Basta 1 token significativo em comum para considerar match
+function hasSignificantOverlap(a: string, b: string): boolean {
+  const tokA = significantTokens(a)
+  const setB = new Set(b.split(' '))
+  return tokA.some((t) => setB.has(t))
 }
 
 function convertSharedLinkToEmbed(url: string): string {
@@ -156,8 +159,7 @@ export async function POST(req: Request) {
 
     for (const file of filesToMatch) {
       const fileNorm = normalizeForMatch(file.name)
-      const fileTokens = tokenize(fileNorm)
-      if (fileTokens.length === 0) continue
+      if (!fileNorm) continue
 
       // 1ª: match exato
       let matchedAd = normalizedAds.find((a) => a.norm === fileNorm)?.original
@@ -169,14 +171,9 @@ export async function POST(req: Request) {
         )?.original
       }
 
-      // 3ª: maior sobreposição de tokens — precisa que TODOS os tokens do arquivo
-      //     apareçam no nome do criativo (arquivo é o subconjunto de palavras)
+      // 3ª: pelo menos 1 palavra significativa (>= 5 letras) em comum
       if (!matchedAd) {
-        const byOverlap = normalizedAds
-          .map((a) => ({ original: a.original, shared: sharedTokenCount(fileNorm, a.norm) }))
-          .filter((a) => a.shared >= fileTokens.length) // todos os tokens do arquivo batem
-          .sort((a, b) => b.shared - a.shared)
-        if (byOverlap.length > 0) matchedAd = byOverlap[0].original
+        matchedAd = normalizedAds.find((a) => hasSignificantOverlap(fileNorm, a.norm))?.original
       }
 
       if (!matchedAd) continue
@@ -200,16 +197,15 @@ export async function POST(req: Request) {
       )
     }
 
-    const sample = filesToMatch.slice(0, 5).map((f) => ({
-      original: f.name.replace(/\.[^/.]+$/, ''),
-      normalized: normalizeForMatch(f.name),
-    }))
+    const fileSample = filesToMatch.slice(0, 5).map((f) => f.name.replace(/\.[^/.]+$/, ''))
+    const adSample = ad_names.slice(0, 8)
 
     return NextResponse.json({
       matched: matches.length,
       total_files: filesToMatch.length,
       matches: matches.map((m) => m.ad_name),
-      debug_sample: sample,
+      debug_files: fileSample,
+      debug_ads: adSample,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
