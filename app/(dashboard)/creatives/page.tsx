@@ -841,7 +841,6 @@ export default function CreativesPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
-  const [syncFilter, setSyncFilter] = useState('')
 
   // Persiste filtros + sort sempre que mudam
   useEffect(() => {
@@ -945,10 +944,10 @@ export default function CreativesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder_path: dropboxFolder,
-          ad_names: syncFilter.trim()
-            ? ads.filter((a) => a.ad_name.toLowerCase().includes(syncFilter.toLowerCase())).map((a) => a.ad_name)
+          ad_names: filters.search.trim()
+            ? ads.filter((a) => a.ad_name.toLowerCase().includes(filters.search.toLowerCase())).map((a) => a.ad_name)
             : ads.map((a) => a.ad_name),
-          name_filter: syncFilter.trim().toLowerCase(),
+          name_filter: filters.search.trim().toLowerCase(),
         }),
       })
       const text = await res.text()
@@ -1298,20 +1297,13 @@ export default function CreativesPage() {
                 )}
               </div>
 
-              {/* Filter + sync */}
+              {/* Sync */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <input
-                  type="text"
-                  placeholder="Filtrar por nome (ex: jeta)"
-                  value={syncFilter}
-                  onChange={(e) => setSyncFilter(e.target.value)}
-                  style={{
-                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)',
-                    color: 'var(--text-primary)', fontSize: '12px', outline: 'none',
-                    width: '200px',
-                  }}
-                />
+                {filters.search.trim() && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Sincronizando criativos com "{filters.search}"
+                  </span>
+                )}
 
                 <button
                   onClick={handleSync}
