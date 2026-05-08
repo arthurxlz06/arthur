@@ -841,6 +841,7 @@ export default function CreativesPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
+  const [syncFilter, setSyncFilter] = useState('')
 
   // Persiste filtros + sort sempre que mudam
   useEffect(() => {
@@ -944,7 +945,10 @@ export default function CreativesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder_path: dropboxFolder,
-          ad_names: ads.map((a) => a.ad_name),
+          ad_names: syncFilter.trim()
+            ? ads.filter((a) => a.ad_name.toLowerCase().includes(syncFilter.toLowerCase())).map((a) => a.ad_name)
+            : ads.map((a) => a.ad_name),
+          name_filter: syncFilter.trim().toLowerCase(),
         }),
       })
       const text = await res.text()
@@ -1292,6 +1296,22 @@ export default function CreativesPage() {
                     {dropboxFolder === '' ? 'Raiz' : dropboxFolder}
                   </span>
                 )}
+              </div>
+
+              {/* Filter + sync */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="Filtrar por nome (ex: jeta)"
+                  value={syncFilter}
+                  onChange={(e) => setSyncFilter(e.target.value)}
+                  style={{
+                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)',
+                    color: 'var(--text-primary)', fontSize: '12px', outline: 'none',
+                    width: '200px',
+                  }}
+                />
 
                 <button
                   onClick={handleSync}
@@ -1304,13 +1324,16 @@ export default function CreativesPage() {
 
                 {syncResult && (
                   <span style={{ fontSize: '12px', color: 'var(--status-success)' }}>
-                    {syncResult.matched} de {syncResult.total} vinculados
+                    ✓ {syncResult.matched} de {syncResult.total} vinculados
                   </span>
                 )}
-                {syncError && (
-                  <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{syncError}</span>
-                )}
               </div>
+
+              {syncError && (
+                <pre style={{ fontSize: '11px', color: 'var(--status-error)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>
+                  {syncError}
+                </pre>
+              )}
             </div>
           </>
         )}

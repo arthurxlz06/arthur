@@ -120,8 +120,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Dropbox não conectado. Reconecte em Configurações.' }, { status: 400 })
     }
 
-    const body = await req.json() as { folder_path: string; ad_names: string[] }
-    const { folder_path, ad_names } = body
+    const body = await req.json() as { folder_path: string; ad_names: string[]; name_filter?: string }
+    const { folder_path, ad_names, name_filter } = body
 
     let token = user.dropbox_access_token as string
 
@@ -145,10 +145,16 @@ export async function POST(req: Request) {
 
     const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
 
+    // Filtra arquivos do Dropbox pelo name_filter se fornecido
+    const filterNorm = name_filter ? normalizeForMatch(name_filter) : ''
+    const filesToMatch = filterNorm
+      ? files.filter((f) => normalizeForMatch(f.name).includes(filterNorm))
+      : files
+
     // Pré-normaliza os ad_names para não repetir o cálculo no loop
     const normalizedAds = ad_names.map((n) => ({ original: n, norm: normalizeForMatch(n) }))
 
-    for (const file of files) {
+    for (const file of filesToMatch) {
       const fileNorm = normalizeForMatch(file.name)
       const fileTokens = tokenize(fileNorm)
       if (fileTokens.length === 0) continue
@@ -194,15 +200,14 @@ export async function POST(req: Request) {
       )
     }
 
-    // Amostra de debug: primeiros 5 arquivos e como normalizam
-    const sample = files.slice(0, 5).map((f) => ({
-      original: f.name,
+    const sample = filesToMatch.slice(0, 5).map((f) => ({
+      original: f.name.replace(/\.[^/.]+$/, ''),
       normalized: normalizeForMatch(f.name),
     }))
 
     return NextResponse.json({
       matched: matches.length,
-      total_files: files.length,
+      total_files: filesToMatch.length,
       matches: matches.map((m) => m.ad_name),
       debug_sample: sample,
     })
