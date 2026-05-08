@@ -13,6 +13,7 @@ import {
   Filter,
   Bookmark,
   Trash2,
+  RefreshCw,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -1025,15 +1026,14 @@ export default function CreativesPage() {
     loadFromCache(selectedAccount, since, val)
   }
 
-  // Fetch ads — usa refresh=1 quando já há dados (força ignorar cache do servidor)
-  const fetchAds = useCallback(async () => {
+  const fetchAds = useCallback(async (forceRefresh = false) => {
     if (!selectedAccount) return
     setLoadingAds(true)
     setAdsError('')
     setAdsWarning('')
     try {
       const params = new URLSearchParams({ account_id: selectedAccount, since, until })
-      if (ads.length > 0) params.set('refresh', '1')
+      if (forceRefresh) params.set('refresh', '1')
       const res = await fetch(`/api/creatives/metrics?${params}`)
       const data = await res.json() as { ads?: AdMetrics[]; error?: string; warning?: string; cached_at?: string }
       if (data.error) {
@@ -1052,7 +1052,7 @@ export default function CreativesPage() {
     } finally {
       setLoadingAds(false)
     }
-  }, [selectedAccount, since, until, ads.length])
+  }, [selectedAccount, since, until])
 
   // Build creatives = merge ads + links
   const creatives: Creative[] = ads.map((ad) => ({
@@ -1136,24 +1136,43 @@ export default function CreativesPage() {
               : 'Selecione uma conta e período para carregar'}
           </p>
         </div>
-        <button
-          onClick={() => setShowCsvModal(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 14px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--bg-border)',
-            background: 'var(--bg-surface)',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '13px',
-          }}
-        >
-          <Upload size={13} />
-          Importar CSV
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {ads.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <button
+                onClick={() => fetchAds(true)}
+                disabled={loadingAds}
+                title="Atualizar métricas da Meta"
+                style={{
+                  width: '36px', height: '36px', borderRadius: '50%',
+                  border: '1px solid var(--bg-border)', background: 'var(--bg-surface)',
+                  color: 'var(--text-secondary)', cursor: loadingAds ? 'wait' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: loadingAds ? 0.5 : 1,
+                }}
+              >
+                <RefreshCw size={15} style={{ animation: loadingAds ? 'spin 0.8s linear infinite' : 'none' }} />
+              </button>
+              {lastFetchedAt && (
+                <span style={{ fontSize: '9px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {new Date(lastFetchedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => setShowCsvModal(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 14px', borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--bg-border)', background: 'var(--bg-surface)',
+              color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '13px',
+            }}
+          >
+            <Upload size={13} />
+            Importar CSV
+          </button>
+        </div>
       </div>
 
       {/* Dropbox panel */}
@@ -1348,34 +1367,21 @@ export default function CreativesPage() {
           />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <button
-            onClick={fetchAds}
-            disabled={loadingAds || !selectedAccount}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '8px 16px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              background: 'var(--accent)',
-              color: 'white',
-              cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-              fontWeight: '500',
-              opacity: !selectedAccount ? 0.5 : 1,
-            }}
-          >
-            {loadingAds ? <Spinner size={12} /> : null}
-            {ads.length > 0 ? 'Atualizar' : 'Buscar'}
-          </button>
-          {lastFetchedAt && (
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center' }}>
-              {new Date(lastFetchedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
+        <button
+          onClick={() => fetchAds(false)}
+          disabled={loadingAds || !selectedAccount}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '5px',
+            padding: '8px 16px', borderRadius: 'var(--radius-sm)',
+            border: 'none', background: 'var(--accent)', color: 'white',
+            cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
+            fontSize: '13px', fontWeight: '500',
+            opacity: !selectedAccount ? 0.5 : 1,
+          }}
+        >
+          {loadingAds ? <Spinner size={12} /> : null}
+          Buscar
+        </button>
       </div>
 
       {/* Search bar — filtro por nome do anúncio */}

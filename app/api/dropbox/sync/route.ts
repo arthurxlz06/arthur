@@ -87,80 +87,80 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email)
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  try {
+    const session = await auth()
+    if (!session?.user?.email)
+      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-  const supabase = getSupabaseAdmin()
-  const { data: user } = await supabase
-    .from('users')
-    .select('id, dropbox_access_token, dropbox_refresh_token')
-    .eq('email', session.user.email)
-    .single()
+    const supabase = getSupabaseAdmin()
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, dropbox_access_token, dropbox_refresh_token')
+      .eq('email', session.user.email)
+      .single()
 
-  if (!user?.dropbox_access_token) {
-    return NextResponse.json({ error: 'Dropbox não conectado' }, { status: 400 })
-  }
-
-  const { folder_path, ad_names } = await req.json() as {
-    folder_path: string
-    ad_names: string[]
-  }
-
-  let token = user.dropbox_access_token as string
-
-  // Listar arquivos — tentar refresh se falhar
-  let files = await listDropboxFolder(token, folder_path)
-
-  if (!files && user.dropbox_refresh_token) {
-    const newToken = await refreshDropboxToken(user.dropbox_refresh_token as string)
-    if (newToken) {
-      token = newToken
-      await supabase
-        .from('users')
-        .update({ dropbox_access_token: newToken })
-        .eq('id', user.id)
-      files = await listDropboxFolder(token, folder_path)
+    if (!user?.dropbox_access_token) {
+      return NextResponse.json({ error: 'Dropbox não conectado. Reconecte em Configurações.' }, { status: 400 })
     }
+
+    const body = await req.json() as { folder_path: string; ad_names: string[] }
+    const { folder_path, ad_names } = body
+
+    let token = user.dropbox_access_token as string
+
+    // Listar arquivos — tentar refresh se falhar
+    let files = await listDropboxFolder(token, folder_path)
+
+    if (!files && user.dropbox_refresh_token) {
+      const newToken = await refreshDropboxToken(user.dropbox_refresh_token as string)
+      if (newToken) {
+        token = newToken
+        await supabase.from('users').update({ dropbox_access_token: newToken }).eq('id', user.id)
+        files = await listDropboxFolder(token, folder_path)
+      }
+    }
+
+    if (!files) {
+      return NextResponse.json({
+        error: `Não foi possível listar a pasta "${folder_path}". Verifique se o Dropbox está conectado corretamente em Configurações e se a pasta existe.`
+      }, { status: 500 })
+    }
+
+    const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
+
+    for (const file of files) {
+      const fileNorm = normalizeForMatch(file.name)
+      const matchedAd = ad_names.find((adName) => normalizeForMatch(adName) === fileNorm)
+      if (!matchedAd) continue
+
+      const sharedUrl = await getOrCreateSharedLink(token, file.path_lower)
+      if (!sharedUrl) continue
+
+      const directUrl = convertSharedLinkToEmbed(sharedUrl)
+      matches.push({ ad_name: matchedAd, dropbox_url: sharedUrl, dropbox_direct_url: directUrl })
+    }
+
+    if (matches.length > 0) {
+      await supabase.from('creative_links').upsert(
+        matches.map((m) => ({
+          user_id: user.id,
+          ad_name: m.ad_name,
+          dropbox_url: m.dropbox_url,
+          dropbox_direct_url: m.dropbox_direct_url,
+        })),
+        { onConflict: 'user_id,ad_name' }
+      )
+    }
+
+    return NextResponse.json({
+      matched: matches.length,
+      total_files: files.length,
+      matches: matches.map((m) => m.ad_name),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: `Erro interno: ${msg}` }, { status: 500 })
   }
-
-  if (!files) {
-    return NextResponse.json({ error: 'Não foi possível listar a pasta do Dropbox' }, { status: 500 })
-  }
-
-  const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
-
-  for (const file of files) {
-    const fileNorm = normalizeForMatch(file.name)
-
-    const matchedAd = ad_names.find((adName) => normalizeForMatch(adName) === fileNorm)
-
-    if (!matchedAd) continue
-
-    const sharedUrl = await getOrCreateSharedLink(token, file.path_lower)
-    if (!sharedUrl) continue
-
-    const directUrl = convertSharedLinkToEmbed(sharedUrl)
-    matches.push({ ad_name: matchedAd, dropbox_url: sharedUrl, dropbox_direct_url: directUrl })
-  }
-
-  if (matches.length > 0) {
-    await supabase.from('creative_links').upsert(
-      matches.map((m) => ({
-        user_id: user.id,
-        ad_name: m.ad_name,
-        dropbox_url: m.dropbox_url,
-        dropbox_direct_url: m.dropbox_direct_url,
-      })),
-      { onConflict: 'user_id,ad_name' }
-    )
-  }
-
-  return NextResponse.json({
-    matched: matches.length,
-    total_files: files.length,
-    matches: matches.map((m) => m.ad_name),
-  })
 }
 
 // Listar pastas disponíveis no Dropbox
