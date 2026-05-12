@@ -29,11 +29,25 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
   const res = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path, settings: { requested_visibility: 'public' } }),
+    body: JSON.stringify({ path }),
   })
-  let data: { url?: string; error_summary?: string; shared_link_already_exists?: { metadata?: { url: string } } }
+  let data: { url?: string; error?: { '.tag'?: string; shared_link_already_exists?: { metadata?: { url?: string } } } }
   try { data = await res.json() } catch { return null }
-  return data.url ?? data.shared_link_already_exists?.metadata?.url ?? null
+  if (data.url) return data.url
+  const embedded = data.error?.shared_link_already_exists?.metadata?.url
+  if (embedded) return embedded
+  if (data.error?.['.tag'] === 'shared_link_already_exists') {
+    try {
+      const r = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      const d = await r.json() as { links?: { url?: string }[] }
+      return d.links?.[0]?.url ?? null
+    } catch { return null }
+  }
+  return null
 }
 
 // GET — lista arquivos de uma pasta

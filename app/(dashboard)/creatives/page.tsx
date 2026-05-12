@@ -847,15 +847,18 @@ export default function CreativesPage() {
   const [dropboxFiles, setDropboxFiles] = useState<{ name: string; path: string }[]>([])
   const [dropboxFilesLoading, setDropboxFilesLoading] = useState(false)
   const [fileSearch, setFileSearch] = useState('')
+  const [pickerError, setPickerError] = useState('')
+  const [pickingFile, setPickingFile] = useState<string | null>(null)
 
   // Persiste filtros + sort sempre que mudam
   useEffect(() => {
     localStorage.setItem('creatives_ui', JSON.stringify({ filters, sortField, sortDir }))
   }, [filters, sortField, sortDir])
 
-  // Persiste pasta Dropbox sempre que muda
+  // Persiste pasta Dropbox sempre que muda; reseta lista de arquivos
   useEffect(() => {
     localStorage.setItem('creatives_dropbox', JSON.stringify({ folder: dropboxFolder, browsePath: dropboxBrowsePath }))
+    setDropboxFiles([])
   }, [dropboxFolder, dropboxBrowsePath])
 
   // Load saved filter sets from localStorage
@@ -957,18 +960,35 @@ export default function CreativesPage() {
         }),
       })
       const text = await res.text()
-      let data: { matched?: number; total_files?: number; error?: string; debug_files?: string[]; debug_ads?: string[] }
+      let data: {
+        matched?: number; total_files?: number; name_matches?: number; link_fails?: number
+        error?: string; debug_files?: string[]; debug_ads?: string[]
+        debug_first_file_tokens?: string[]; debug_first_ad_tokens?: string[]; debug_first_score?: number
+      }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
         setSyncError(data.error)
       } else {
         const matched = data.matched ?? 0
         const total = data.total_files ?? 0
+        const nameMatches = data.name_matches ?? 0
+        const linkFails = data.link_fails ?? 0
         setSyncResult({ matched, total })
         if (matched === 0 && total > 0) {
           const fileSample = (data.debug_files ?? []).map((s) => `  "${s}"`).join('\n')
           const adSample = (data.debug_ads ?? []).map((s) => `  "${s}"`).join('\n')
-          setSyncError(`0 de ${total} arquivos bateram.\n\nArquivos no Dropbox:\n${fileSample}\n\nCriativos enviados ao sync:\n${adSample}`)
+          const fileTokens = (data.debug_first_file_tokens ?? []).join(', ')
+          const adTokens = (data.debug_first_ad_tokens ?? []).join(', ')
+          const score = data.debug_first_score ?? -1
+          setSyncError(
+            `0 vinculados de ${total} arquivos.\n` +
+            `• Nomes que bateram: ${nameMatches} | Links que falharam: ${linkFails}\n\n` +
+            `Tokens 1º arquivo: [${fileTokens}]\n` +
+            `Tokens 1º ad: [${adTokens}]\n` +
+            `Score: ${score}\n\n` +
+            `Arquivos Dropbox (amostra):\n${fileSample}\n\n` +
+            `Criativos:\n${adSample}`
+          )
         }
         await fetchLinks()
       }
@@ -1118,32 +1138,49 @@ export default function CreativesPage() {
   }
 
   const openPicker = async (adName: string) => {
-    if (dropboxConnected && dropboxFolder) {
-      setPickingFor(adName)
-      setFileSearch('')
-      if (dropboxFiles.length === 0) {
-        setDropboxFilesLoading(true)
-        try {
-          const res = await fetch(`/api/dropbox/link?path=${encodeURIComponent(dropboxFolder)}`)
-          const data = await res.json() as { files?: { name: string; path: string }[] }
-          setDropboxFiles(data.files ?? [])
-        } catch { /* ignora */ } finally {
-          setDropboxFilesLoading(false)
-        }
+    setPickingFor(adName)
+    setFileSearch('')
+    setPickerError('')
+    setDropboxFiles([])
+    if (!dropboxConnected || !dropboxFolder) return
+    setDropboxFilesLoading(true)
+    try {
+      const res = await fetch(`/api/dropbox/link?path=${encodeURIComponent(dropboxFolder)}`)
+      const data = await res.json() as { files?: { name: string; path: string }[]; error?: string }
+      if (data.error) {
+        setPickerError(`Erro ao carregar arquivos: ${data.error}`)
+      } else {
+        setDropboxFiles(data.files ?? [])
+        if ((data.files ?? []).length === 0) setPickerError('Nenhum arquivo encontrado na pasta selecionada.')
       }
-    } else {
-      setLinkModal(adName)
+    } catch (err) {
+      setPickerError(`Erro de conexão: ${String(err)}`)
+    } finally {
+      setDropboxFilesLoading(false)
     }
   }
 
   const handlePickFile = async (adName: string, filePath: string) => {
-    setPickingFor(null)
-    await fetch('/api/dropbox/link', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_path: filePath, ad_name: adName }),
-    })
-    await fetchLinks()
+    setPickingFile(filePath)
+    setPickerError('')
+    try {
+      const res = await fetch('/api/dropbox/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath, ad_name: adName }),
+      })
+      const data = await res.json() as { error?: string; dropbox_direct_url?: string }
+      if (data.error) {
+        setPickerError(`Erro ao vincular: ${data.error}`)
+        return
+      }
+      setPickingFor(null)
+      await fetchLinks()
+    } catch (err) {
+      setPickerError(`Erro: ${String(err)}`)
+    } finally {
+      setPickingFile(null)
+    }
   }
 
   const handleCsvImport = async (batch: { ad_name: string; dropbox_url: string }[]) => {
@@ -1809,16 +1846,27 @@ export default function CreativesPage() {
               />
             </div>
 
+            {/* Error */}
+            {pickerError && (
+              <div style={{ padding: '10px 16px', background: 'rgba(239,68,68,0.08)', borderBottom: '1px solid rgba(239,68,68,0.2)', color: 'var(--status-error)', fontSize: '12px' }}>
+                {pickerError}
+              </div>
+            )}
+
             {/* File list */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {dropboxFilesLoading && (
-                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Carregando arquivos...
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <Spinner size={14} /> Carregando arquivos...
                 </div>
               )}
-              {!dropboxFilesLoading && dropboxFiles.length === 0 && (
+              {!dropboxFilesLoading && dropboxFiles.length === 0 && !pickerError && (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Nenhum arquivo encontrado na pasta selecionada.
+                  {!dropboxConnected
+                    ? 'Conecte o Dropbox no painel acima para vincular vídeos.'
+                    : !dropboxFolder
+                    ? 'Selecione uma pasta no painel do Dropbox acima antes de vincular.'
+                    : 'Nenhum arquivo encontrado na pasta selecionada.'}
                 </div>
               )}
               {!dropboxFilesLoading && dropboxFiles
@@ -1827,14 +1875,19 @@ export default function CreativesPage() {
                   <button
                     key={f.path}
                     onClick={() => handlePickFile(pickingFor!, f.path)}
+                    disabled={pickingFile !== null}
                     style={{
                       width: '100%', textAlign: 'left', padding: '10px 16px',
-                      background: 'none', border: 'none', borderBottom: '1px solid var(--bg-border)',
-                      cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)',
+                      background: pickingFile === f.path ? 'var(--bg-elevated)' : 'none',
+                      border: 'none', borderBottom: '1px solid var(--bg-border)',
+                      cursor: pickingFile !== null ? 'wait' : 'pointer',
+                      fontSize: '13px', color: 'var(--text-primary)',
+                      display: 'flex', alignItems: 'center', gap: '8px',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    onMouseEnter={(e) => { if (!pickingFile) e.currentTarget.style.background = 'var(--bg-elevated)' }}
+                    onMouseLeave={(e) => { if (pickingFile !== f.path) e.currentTarget.style.background = 'none' }}
                   >
+                    {pickingFile === f.path && <Spinner size={12} />}
                     {f.name}
                   </button>
                 ))

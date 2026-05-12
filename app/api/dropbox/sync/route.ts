@@ -11,23 +11,28 @@ interface DropboxEntry {
 interface DropboxSharedLink {
   url?: string
   error_summary?: string
-  shared_link_already_exists?: { metadata?: { url: string } }
+  error?: {
+    '.tag'?: string
+    shared_link_already_exists?: { metadata?: { url?: string } }
+  }
 }
 
-function toWords(name: string): string[] {
+// Extrai tokens significativos: ao menos 4 chars e NÃO puramente numérico
+function getTokens(name: string): string[] {
   return name
     .toLowerCase()
-    .replace(/\.[^/.]+$/, '')          // remove extensão
-    .replace(/[_\-\.\[\](){}]/g, ' ')  // separadores → espaço
+    .replace(/\.[^/.]+$/, '')             // remove extensão
+    .replace(/[_\-\.\[\](){}]/g, ' ')     // separadores → espaço
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
-    .filter((w) => w.length >= 3)
+    .filter((w) => w.length >= 4 && !/^\d+$/.test(w))
 }
 
-function wordsOverlap(a: string[], b: string[]): boolean {
-  const setB = new Set(b.filter((w) => w.length >= 5))
-  return a.some((w) => w.length >= 5 && setB.has(w))
+// Conta quantos tokens do arquivo aparecem como substring no nome do anúncio
+function scoreMatch(fileTokens: string[], adName: string): number {
+  const adLower = adName.toLowerCase()
+  return fileTokens.reduce((n, t) => n + (adLower.includes(t) ? 1 : 0), 0)
 }
 
 function convertSharedLinkToEmbed(url: string): string {
@@ -71,31 +76,41 @@ async function listDropboxFolder(
 }
 
 async function getOrCreateSharedLink(token: string, path: string): Promise<string | null> {
-  const res = await fetch(
-    'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        path,
-        settings: { requested_visibility: 'public' },
-      }),
-    }
-  )
   let data: DropboxSharedLink
   try {
+    const res = await fetch(
+      'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      }
+    )
     data = await res.json() as DropboxSharedLink
   } catch {
     return null
   }
-  return (
-    data.url ??
-    data.shared_link_already_exists?.metadata?.url ??
-    null
-  )
+
+  if (data.url) return data.url
+
+  const embeddedUrl = data.error?.shared_link_already_exists?.metadata?.url
+  if (embeddedUrl) return embeddedUrl
+
+  if (data.error?.['.tag'] === 'shared_link_already_exists') {
+    try {
+      const listRes = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      const listData = await listRes.json() as { links?: { url?: string }[] }
+      return listData.links?.[0]?.url ?? null
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
 
 export async function POST(req: Request) {
@@ -120,7 +135,6 @@ export async function POST(req: Request) {
 
     let token = user.dropbox_access_token as string
 
-    // Listar arquivos — tentar refresh se falhar
     let files = await listDropboxFolder(token, folder_path)
 
     if (!files && user.dropbox_refresh_token) {
@@ -138,41 +152,52 @@ export async function POST(req: Request) {
       }, { status: 500 })
     }
 
-    const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
-
-    // Filtra arquivos do Dropbox pelo name_filter se fornecido
+    // Filtro por keyword (se fornecido)
     const filterKeyword = (name_filter ?? '').toLowerCase().trim()
     const filesToMatch = filterKeyword
       ? files.filter((f) => f.name.toLowerCase().includes(filterKeyword))
       : files
 
-    // Pré-processa os ad_names
-    const processedAds = ad_names.map((n) => ({ original: n, words: toWords(n) }))
+    // Pré-processa tokens dos ad_names
+    const processedAds = ad_names.map((n) => ({ original: n, tokens: getTokens(n) }))
+
+    const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
+    let nameMatchCount = 0
+    let linkFailCount = 0
+
+    const firstFileTokens = filesToMatch.length > 0 ? getTokens(filesToMatch[0].name) : []
+    const firstAdTokens = ad_names.length > 0 ? getTokens(ad_names[0]) : []
+    const firstScore = firstFileTokens.length > 0 && ad_names.length > 0
+      ? scoreMatch(firstFileTokens, ad_names[0])
+      : -1
 
     for (const file of filesToMatch) {
-      const fileWords = toWords(file.name)
-      if (fileWords.length === 0) continue
+      const fileTokens = getTokens(file.name)
+      if (fileTokens.length === 0) continue
 
-      // Encontra o ad_name que tem mais palavras significativas em comum
-      let matchedAd: string | undefined
+      // Encontra o ad com maior score de substring match
+      let bestAd: string | undefined
+      let bestScore = 0
 
-      // 1ª: match exato de palavras
-      matchedAd = processedAds.find((a) =>
-        fileWords.join(' ') === a.words.join(' ')
-      )?.original
-
-      // 2ª: overlap de palavras significativas (>= 5 letras)
-      if (!matchedAd) {
-        matchedAd = processedAds.find((a) => wordsOverlap(fileWords, a.words))?.original
+      for (const ad of processedAds) {
+        const score = scoreMatch(fileTokens, ad.original)
+        if (score > bestScore) {
+          bestScore = score
+          bestAd = ad.original
+        }
       }
 
-      if (!matchedAd) continue
+      if (!bestAd || bestScore === 0) continue
+      nameMatchCount++
 
       const sharedUrl = await getOrCreateSharedLink(token, file.path_lower)
-      if (!sharedUrl) continue
+      if (!sharedUrl) {
+        linkFailCount++
+        continue
+      }
 
       const directUrl = convertSharedLinkToEmbed(sharedUrl)
-      matches.push({ ad_name: matchedAd, dropbox_url: sharedUrl, dropbox_direct_url: directUrl })
+      matches.push({ ad_name: bestAd, dropbox_url: sharedUrl, dropbox_direct_url: directUrl })
     }
 
     if (matches.length > 0) {
@@ -187,15 +212,17 @@ export async function POST(req: Request) {
       )
     }
 
-    const fileSample = filesToMatch.slice(0, 5).map((f) => f.name.replace(/\.[^/.]+$/, ''))
-    const adSample = ad_names.slice(0, 8)
-
     return NextResponse.json({
       matched: matches.length,
       total_files: filesToMatch.length,
+      name_matches: nameMatchCount,
+      link_fails: linkFailCount,
       matches: matches.map((m) => m.ad_name),
-      debug_files: fileSample,
-      debug_ads: adSample,
+      debug_files: filesToMatch.slice(0, 5).map((f) => f.name.replace(/\.[^/.]+$/, '')),
+      debug_ads: ad_names.slice(0, 8),
+      debug_first_file_tokens: firstFileTokens,
+      debug_first_ad_tokens: firstAdTokens,
+      debug_first_score: firstScore,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -235,7 +262,6 @@ export async function GET(req: Request) {
 
   let data = await tryList(token)
 
-  // Token expirado — tenta refresh
   if (data.error_summary && user.dropbox_refresh_token) {
     const newToken = await refreshDropboxToken(user.dropbox_refresh_token as string)
     if (newToken) {
