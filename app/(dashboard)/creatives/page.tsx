@@ -964,6 +964,7 @@ export default function CreativesPage() {
         matched?: number; total_files?: number; name_matches?: number; link_fails?: number
         error?: string; debug_files?: string[]; debug_ads?: string[]
         debug_first_file_tokens?: string[]; debug_first_ad_tokens?: string[]; debug_first_score?: number
+        debug_link?: unknown
       }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
@@ -983,6 +984,7 @@ export default function CreativesPage() {
           setSyncError(
             `0 vinculados de ${total} arquivos.\n` +
             `• Nomes que bateram: ${nameMatches} | Links que falharam: ${linkFails}\n\n` +
+            `ERRO DROPBOX:\n${JSON.stringify(data.debug_link, null, 2)}\n\n` +
             `Tokens 1º arquivo: [${fileTokens}]\n` +
             `Tokens 1º ad: [${adTokens}]\n` +
             `Score: ${score}\n\n` +

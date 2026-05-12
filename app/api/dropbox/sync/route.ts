@@ -75,8 +75,9 @@ async function listDropboxFolder(
   return (data.entries ?? []).filter((e) => e['.tag'] === 'file')
 }
 
-async function getOrCreateSharedLink(token: string, path: string): Promise<string | null> {
-  let data: DropboxSharedLink
+async function getOrCreateSharedLink(token: string, path: string): Promise<{ url: string | null; dbgCreate: unknown; dbgList: unknown }> {
+  let rawCreate: unknown = '__not_called__'
+  let rawList: unknown = null
   try {
     const res = await fetch(
       'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
@@ -86,15 +87,16 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
         body: JSON.stringify({ path }),
       }
     )
-    data = await res.json() as DropboxSharedLink
-  } catch {
-    return null
+    rawCreate = await res.json()
+  } catch (e) {
+    return { url: null, dbgCreate: String(e), dbgList: null }
   }
 
-  if (data.url) return data.url
+  const data = rawCreate as DropboxSharedLink
+  if (data.url) return { url: data.url, dbgCreate: null, dbgList: null }
 
   const embeddedUrl = data.error?.shared_link_already_exists?.metadata?.url
-  if (embeddedUrl) return embeddedUrl
+  if (embeddedUrl) return { url: embeddedUrl, dbgCreate: null, dbgList: null }
 
   if (data.error?.['.tag'] === 'shared_link_already_exists') {
     try {
@@ -103,14 +105,15 @@ async function getOrCreateSharedLink(token: string, path: string): Promise<strin
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
       })
-      const listData = await listRes.json() as { links?: { url?: string }[] }
-      return listData.links?.[0]?.url ?? null
-    } catch {
-      return null
+      rawList = await listRes.json()
+      const url = (rawList as { links?: { url?: string }[] }).links?.[0]?.url ?? null
+      return { url, dbgCreate: url ? null : rawCreate, dbgList: url ? null : rawList }
+    } catch (e) {
+      return { url: null, dbgCreate: rawCreate, dbgList: String(e) }
     }
   }
 
-  return null
+  return { url: null, dbgCreate: rawCreate, dbgList: null }
 }
 
 export async function POST(req: Request) {
@@ -164,6 +167,7 @@ export async function POST(req: Request) {
     const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
     let nameMatchCount = 0
     let linkFailCount = 0
+    let firstLinkDebug: { dbgCreate: unknown; dbgList: unknown } | null = null
 
     const firstFileTokens = filesToMatch.length > 0 ? getTokens(filesToMatch[0].name) : []
     const firstAdTokens = ad_names.length > 0 ? getTokens(ad_names[0]) : []
@@ -190,9 +194,10 @@ export async function POST(req: Request) {
       if (!bestAd || bestScore === 0) continue
       nameMatchCount++
 
-      const sharedUrl = await getOrCreateSharedLink(token, file.path_lower)
+      const { url: sharedUrl, dbgCreate, dbgList } = await getOrCreateSharedLink(token, file.path_lower)
       if (!sharedUrl) {
         linkFailCount++
+        if (!firstLinkDebug) firstLinkDebug = { dbgCreate, dbgList }
         continue
       }
 
@@ -223,6 +228,7 @@ export async function POST(req: Request) {
       debug_first_file_tokens: firstFileTokens,
       debug_first_ad_tokens: firstAdTokens,
       debug_first_score: firstScore,
+      debug_link: firstLinkDebug ?? 'nenhuma_falha_capturada',
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
