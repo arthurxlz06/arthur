@@ -275,6 +275,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: data.error_summary }, { status: 500 })
   }
 
+  // Modo debug: tenta criar shared link para o 1º arquivo e retorna o raw
+  if (searchParams.get('debug') === '1') {
+    const firstFile = (data.entries ?? []).find((e) => e['.tag'] === 'file')
+    if (!firstFile) return NextResponse.json({ error: 'Nenhum arquivo na pasta', entries: data.entries })
+    const dbgRes = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: firstFile.path_lower }),
+    })
+    const dbgRaw = await dbgRes.json()
+    return NextResponse.json({ file: firstFile.name, path: firstFile.path_lower, dropbox_raw: dbgRaw, http_status: dbgRes.status })
+  }
+
   const folders = (data.entries ?? [])
     .filter((e) => e['.tag'] === 'folder')
     .map((e) => ({ name: e.name, path: e.path_lower }))
