@@ -943,7 +943,8 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
     document.addEventListener('mouseup', onUp)
   }
 
-  const gridTemplate = `64px 1fr ${visibleCols.map((c) => `${getW(c.key, c.defaultWidth)}px`).join(' ')}`
+  const nameWidth = getW('name', 240)
+  const gridTemplate = `64px ${nameWidth}px ${visibleCols.map((c) => `${getW(c.key, c.defaultWidth)}px`).join(' ')}`
 
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -978,12 +979,15 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
       </div>
 
       {/* Scrollable table */}
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: '560px' }}>
+      <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
+        <div style={{ minWidth: `${64 + nameWidth + visibleCols.reduce((s, c) => s + getW(c.key, c.defaultWidth), 0)}px` }}>
           {/* Header */}
           <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, background: 'var(--bg-elevated)', borderBottom: '2px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 10 }}>
             <div style={{ padding: '9px 8px' }} />
-            <div style={{ padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CRIATIVO</div>
+            <div style={{ position: 'relative', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', userSelect: 'none' }}>
+              CRIATIVO
+              <div title="Arrastar para redimensionar" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }} onMouseDown={(e) => startResize('name', nameWidth, e)} />
+            </div>
             {visibleCols.map((col) => (
               <div key={col.key} style={{ position: 'relative', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', textAlign: 'right', borderLeft: '1px solid var(--bg-border)', userSelect: 'none' }}>
                 {col.label}
@@ -1021,8 +1025,8 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
                       </div>
                     )}
                   </div>
-                  <div style={{ padding: '8px 10px 8px 4px', overflow: 'hidden' }}>
-                    <p style={{ fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
+                  <div style={{ padding: '8px 10px 8px 4px' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: '1.4' }}>{c.ad_name}</p>
                   </div>
                   {visibleCols.map((col) => (
                     <div key={col.key} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', textAlign: 'right', borderLeft: '1px solid var(--bg-border)' }}>
