@@ -122,48 +122,41 @@ export async function POST(req: Request) {
     // Pré-processa tokens dos ad_names
     const processedAds = ad_names.map((n) => ({ original: n, tokens: getTokens(n) }))
 
-    const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
-    const matchedAds = new Set<string>()
-    let nameMatchCount = 0
-    let linkFailCount = 0
-
-    const skippedDuplicate: { file: string; ad: string; score: number }[] = []
-    const skippedNoMatch: { file: string; bestAd: string; bestScore: number }[] = []
+    // Para cada anúncio, encontra o arquivo com maior score (melhor match vence)
+    const adToBestFile = new Map<string, { file: DropboxEntry; score: number }>()
 
     for (const file of filesToMatch) {
       const fileTokens = getTokens(file.name)
       if (fileTokens.length === 0) continue
 
-      // Encontra o ad com maior score de substring match
-      let bestAd: string | undefined
-      let bestScore = 0
-
       for (const ad of processedAds) {
         const score = scoreMatch(fileTokens, ad.original)
-        if (score > bestScore) {
-          bestScore = score
-          bestAd = ad.original
+        if (score === 0) continue
+        const existing = adToBestFile.get(ad.original)
+        if (!existing || score > existing.score) {
+          adToBestFile.set(ad.original, { file, score })
         }
       }
+    }
 
-      if (!bestAd || bestScore === 0) {
-        if (skippedNoMatch.length < 5) skippedNoMatch.push({ file: file.name, bestAd: bestAd ?? '—', bestScore })
-        continue
-      }
-      if (matchedAds.has(bestAd)) {
-        if (skippedDuplicate.length < 5) skippedDuplicate.push({ file: file.name, ad: bestAd, score: bestScore })
+    const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
+    let nameMatchCount = 0
+    let linkFailCount = 0
+    const noMatchAds: string[] = []
+
+    for (const ad of processedAds) {
+      const best = adToBestFile.get(ad.original)
+      if (!best) {
+        if (noMatchAds.length < 5) noMatchAds.push(ad.original)
         continue
       }
       nameMatchCount++
-
-      const directUrl = await getTemporaryLink(token, file.path_lower)
+      const directUrl = await getTemporaryLink(token, best.file.path_lower)
       if (!directUrl) {
         linkFailCount++
         continue
       }
-
-      matchedAds.add(bestAd)
-      matches.push({ ad_name: bestAd, dropbox_url: directUrl, dropbox_direct_url: directUrl })
+      matches.push({ ad_name: ad.original, dropbox_url: directUrl, dropbox_direct_url: directUrl })
     }
 
     let upsertError: string | null = null
@@ -184,13 +177,13 @@ export async function POST(req: Request) {
       matched: upsertError ? 0 : matches.length,
       upsert_error: upsertError,
       total_files: filesToMatch.length,
+      total_ads: ad_names.length,
       name_matches: nameMatchCount,
       link_fails: linkFailCount,
       matches: matches.map((m) => m.ad_name),
       debug_files: filesToMatch.slice(0, 5).map((f) => f.name),
       debug_ads: ad_names.slice(0, 5),
-      debug_skipped_duplicate: skippedDuplicate,
-      debug_skipped_no_match: skippedNoMatch,
+      debug_no_match_ads: noMatchAds,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

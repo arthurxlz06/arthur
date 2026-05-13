@@ -962,10 +962,9 @@ export default function CreativesPage() {
       })
       const text = await res.text()
       let data: {
-        matched?: number; total_files?: number; name_matches?: number; link_fails?: number
+        matched?: number; total_files?: number; total_ads?: number; name_matches?: number; link_fails?: number
         error?: string; upsert_error?: string; debug_files?: string[]; debug_ads?: string[]
-        debug_skipped_duplicate?: { file: string; ad: string; score: number }[]
-        debug_skipped_no_match?: { file: string; bestAd: string; bestScore: number }[]
+        debug_no_match_ads?: string[]
       }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
@@ -974,20 +973,16 @@ export default function CreativesPage() {
         setSyncError(`Erro ao salvar no banco: ${data.upsert_error}`)
       } else {
         const matched = data.matched ?? 0
-        const total = data.total_files ?? 0
-        setSyncResult({ matched, total })
-        if (matched < total) {
-          const dup = (data.debug_skipped_duplicate ?? [])
-            .map((d) => `  arquivo: "${d.file}"\n  tentou: "${d.ad}" (score ${d.score})`).join('\n\n')
-          const noMatch = (data.debug_skipped_no_match ?? [])
-            .map((d) => `  arquivo: "${d.file}"\n  melhor: "${d.bestAd}" (score ${d.bestScore})`).join('\n\n')
+        const totalAds = data.total_ads ?? 0
+        setSyncResult({ matched, total: totalAds })
+        if (matched < totalAds) {
+          const noMatch = (data.debug_no_match_ads ?? []).map((a) => `  "${a}"`).join('\n')
           const fileSample = (data.debug_files ?? []).join('\n  ')
-          const adSample = (data.debug_ads ?? []).join('\n  ')
           setSyncDebug(
-            `=== ARQUIVOS SEM MATCH (score=0) ===\n${noMatch || '  (nenhum)'}\n\n` +
-            `=== ARQUIVOS BLOQUEADOS (anúncio já vinculado) ===\n${dup || '  (nenhum)'}\n\n` +
-            `=== AMOSTRA ARQUIVOS DROPBOX ===\n  ${fileSample}\n\n` +
-            `=== AMOSTRA ANÚNCIOS ===\n  ${adSample}`
+            `${matched} de ${totalAds} anúncios vinculados\n` +
+            `Arquivos Dropbox: ${data.total_files ?? 0} | Link fails: ${data.link_fails ?? 0}\n\n` +
+            `=== ANÚNCIOS SEM ARQUIVO CORRESPONDENTE (amostra) ===\n${noMatch || '  (nenhum)'}\n\n` +
+            `=== AMOSTRA ARQUIVOS DROPBOX ===\n  ${fileSample}`
           )
         } else {
           setSyncDebug(null)
