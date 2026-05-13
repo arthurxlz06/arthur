@@ -18,6 +18,7 @@ import {
   Play,
   SlidersHorizontal,
   FolderOpen,
+  Eye,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -858,6 +859,211 @@ const clearBtnStyle: React.CSSProperties = {
   padding: '2px',
 }
 
+// ─── Table View ───────────────────────────────────────────────────────────────
+
+const ALL_TABLE_COLS = [
+  { key: 'roas',        label: 'ROAS',        defaultWidth: 76,  defaultVisible: true,  fmt: (v: number) => `${v.toFixed(2)}x` },
+  { key: 'spend',       label: 'Gasto',       defaultWidth: 96,  defaultVisible: true,  fmt: (v: number) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) },
+  { key: 'revenue',     label: 'Receita',     defaultWidth: 96,  defaultVisible: true,  fmt: (v: number) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) },
+  { key: 'purchases',   label: 'Vendas',      defaultWidth: 68,  defaultVisible: true,  fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'cpa',         label: 'CPA',         defaultWidth: 86,  defaultVisible: true,  fmt: (v: number) => v > 0 ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) : '—' },
+  { key: 'ctr',         label: 'CTR',         defaultWidth: 66,  defaultVisible: true,  fmt: (v: number) => `${v.toFixed(1)}%` },
+  { key: 'hook_rate',   label: 'Hook Rate',   defaultWidth: 86,  defaultVisible: true,  fmt: (v: number) => `${v.toFixed(1)}%` },
+  { key: 'body_rate',   label: 'Body Rate',   defaultWidth: 86,  defaultVisible: false, fmt: (v: number) => `${v.toFixed(1)}%` },
+  { key: 'cpm',         label: 'CPM',         defaultWidth: 86,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) },
+  { key: 'cpc',         label: 'CPC',         defaultWidth: 86,  defaultVisible: false, fmt: (v: number) => v > 0 ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) : '—' },
+  { key: 'impressions', label: 'Impressões',  defaultWidth: 96,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'clicks',      label: 'Cliques',     defaultWidth: 74,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'lp_views',    label: 'LP Views',    defaultWidth: 80,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'video_views', label: 'Video Views', defaultWidth: 90,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'avg_ticket',  label: 'Ticket Médio',defaultWidth: 100, defaultVisible: false, fmt: (v: number) => v > 0 ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) : '—' },
+  { key: 'conv_rate',   label: 'Tx Conv.',    defaultWidth: 74,  defaultVisible: false, fmt: (v: number) => `${v.toFixed(1)}%` },
+  { key: 'video_3s',    label: '3s VV',       defaultWidth: 68,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'video_15s',   label: '15s VV',      defaultWidth: 68,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+  { key: 'video_30s',   label: '30s VV',      defaultWidth: 68,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
+] as const
+
+function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adName: string) => void }) {
+  const [visibleKeys, setVisibleKeys] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('table_visible_cols') ?? 'null') ?? ALL_TABLE_COLS.filter((c) => c.defaultVisible).map((c) => c.key) }
+    catch { return ALL_TABLE_COLS.filter((c) => c.defaultVisible).map((c) => c.key) }
+  })
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('table_col_widths') ?? '{}') }
+    catch { return {} }
+  })
+  const [showColPicker, setShowColPicker] = useState(false)
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null)
+  const colPickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const visibleCols = ALL_TABLE_COLS.filter((c) => visibleKeys.includes(c.key))
+  const getW = (key: string, def: number) => colWidths[key] ?? def
+
+  const toggleCol = (key: string) => {
+    setVisibleKeys((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+      localStorage.setItem('table_visible_cols', JSON.stringify(next))
+      return next
+    })
+  }
+  const showAll = () => {
+    const all = ALL_TABLE_COLS.map((c) => c.key)
+    setVisibleKeys(all as string[])
+    localStorage.setItem('table_visible_cols', JSON.stringify(all))
+  }
+
+  const startResize = (key: string, startWidth: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    resizingRef.current = { key, startX: e.clientX, startWidth }
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return
+      const { key: k, startX, startWidth: sw } = resizingRef.current
+      const newW = Math.max(48, sw + ev.clientX - startX)
+      setColWidths((prev) => {
+        const next = { ...prev, [k]: newW }
+        localStorage.setItem('table_col_widths', JSON.stringify(next))
+        return next
+      })
+    }
+    const onUp = () => {
+      resizingRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  const gridTemplate = `64px 1fr ${visibleCols.map((c) => `${getW(c.key, c.defaultWidth)}px`).join(' ')}`
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+      {/* Column picker toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '7px 12px', borderBottom: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', position: 'relative' }} ref={colPickerRef}>
+        <button
+          onClick={() => setShowColPicker((v) => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${showColPicker ? 'var(--accent)' : 'var(--bg-border)'}`, background: showColPicker ? 'rgba(91,110,245,0.1)' : 'transparent', color: showColPicker ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: showColPicker ? '500' : '400' }}
+        >
+          <Eye size={13} /> Colunas · {visibleKeys.length}
+        </button>
+
+        {showColPicker && (
+          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: '12px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', padding: '14px 16px', zIndex: 60, width: '300px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Métricas visíveis</span>
+              <button onClick={showAll} style={{ fontSize: '11px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Mostrar todas</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+              {ALL_TABLE_COLS.map((col) => {
+                const active = visibleKeys.includes(col.key)
+                return (
+                  <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', background: active ? 'rgba(91,110,245,0.07)' : 'transparent', transition: 'background 100ms' }}>
+                    <input type="checkbox" checked={active} onChange={() => toggleCol(col.key)} style={{ cursor: 'pointer', accentColor: 'var(--accent)', width: '13px', height: '13px', flexShrink: 0 }} />
+                    <span style={{ fontSize: '12px', color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{col.label}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Scrollable table */}
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: '560px' }}>
+          {/* Header */}
+          <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, background: 'var(--bg-elevated)', borderBottom: '2px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 10 }}>
+            <div style={{ padding: '9px 8px' }} />
+            <div style={{ padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CRIATIVO</div>
+            {visibleCols.map((col) => (
+              <div key={col.key} style={{ position: 'relative', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', textAlign: 'right', borderLeft: '1px solid var(--bg-border)', userSelect: 'none' }}>
+                {col.label}
+                <div
+                  title="Arrastar para redimensionar"
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }}
+                  onMouseDown={(e) => startResize(col.key, getW(col.key, col.defaultWidth), e)}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {creatives.map((c) => {
+            const isExpanded = expandedRow === c.ad_id
+            return (
+              <div key={c.ad_id} style={{ borderBottom: '1px solid var(--bg-border)' }}>
+                <div
+                  style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', cursor: 'pointer', transition: 'background 80ms' }}
+                  onClick={() => setExpandedRow(isExpanded ? null : c.ad_id)}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                >
+                  <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {c.link ? (
+                      <div style={{ position: 'relative', width: '36px', height: '48px', borderRadius: '4px', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
+                        <video src={c.link.dropbox_direct_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} preload="metadata" muted />
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
+                          <Play size={11} color="white" fill="white" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ width: '36px', height: '48px', borderRadius: '4px', border: '1px dashed var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); onLink(c.ad_name) }}>
+                        <Link2 size={12} color="var(--text-muted)" />
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ padding: '8px 10px 8px 4px', overflow: 'hidden' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
+                  </div>
+                  {visibleCols.map((col) => (
+                    <div key={col.key} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', textAlign: 'right', borderLeft: '1px solid var(--bg-border)' }}>
+                      {col.fmt(c[col.key as keyof AdMetrics] as number)}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Expanded panel */}
+                {isExpanded && (
+                  <div style={{ padding: '16px', borderTop: '1px solid var(--bg-border)', display: 'flex', gap: '20px', alignItems: 'flex-start', background: 'var(--bg-elevated)' }}>
+                    {c.link ? (
+                      <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '108px', borderRadius: '8px', aspectRatio: '9/16', background: '#000', flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: '108px', aspectRatio: '9/16', borderRadius: '8px', border: '1px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => onLink(c.ad_name)}>
+                        <Link2 size={18} color="var(--text-muted)" />
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', padding: '0 8px' }}>Vincular vídeo</span>
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '2px' }}>
+                        {ALL_TABLE_COLS.map((col) => (
+                          <div key={col.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 6px', borderRadius: '4px', background: visibleKeys.includes(col.key) ? 'rgba(91,110,245,0.05)' : 'transparent' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{col.label}</span>
+                            <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>{col.fmt(c[col.key as keyof AdMetrics] as number)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const SORT_OPTIONS: { value: SortField; label: string }[] = [
@@ -962,7 +1168,6 @@ export default function CreativesPage() {
     try { return (localStorage.getItem('creatives_view') as 'grid' | 'table') ?? 'grid' }
     catch { return 'grid' }
   })
-  const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   // Seletor manual de arquivo Dropbox por criativo
   const [pickingFor, setPickingFor] = useState<string | null>(null)
@@ -1652,87 +1857,7 @@ export default function CreativesPage() {
 
       {/* Table view */}
       {!loadingAds && sorted.length > 0 && viewMode === 'table' && (
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: '860px' }}>
-              {/* Table header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 80px 96px 96px 70px 72px 72px 82px 70px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--bg-border)' }}>
-                {['', 'Criativo', 'ROAS', 'Gasto', 'Receita', 'CTR', 'Hook', 'Body', 'CPA', 'Vendas'].map((h, i) => (
-                  <div key={i} style={{ padding: '8px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.04em', textAlign: i > 1 ? 'right' : 'left' }}>{h}</div>
-                ))}
-              </div>
-
-              {/* Table rows */}
-              {sorted.map((c) => {
-                const isExpanded = expandedRow === c.ad_id
-                return (
-                  <div key={c.ad_id} style={{ borderBottom: '1px solid var(--bg-border)' }}>
-                    <div
-                      style={{ display: 'grid', gridTemplateColumns: '64px 1fr 80px 96px 96px 70px 72px 72px 82px 70px', alignItems: 'center', cursor: 'pointer' }}
-                      onClick={() => setExpandedRow(isExpanded ? null : c.ad_id)}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)' }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                    >
-                      {/* Thumbnail */}
-                      <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {c.link ? (
-                          <div style={{ position: 'relative', width: '36px', height: '48px', borderRadius: '4px', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
-                            <video src={c.link.dropbox_direct_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} preload="metadata" muted />
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
-                              <Play size={11} color="white" fill="white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            style={{ width: '36px', height: '48px', borderRadius: '4px', border: '1px dashed var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            onClick={(e) => { e.stopPropagation(); openPicker(c.ad_name) }}
-                          >
-                            <Link2 size={12} color="var(--text-muted)" />
-                          </div>
-                        )}
-                      </div>
-                      {/* Name */}
-                      <div style={{ padding: '8px 10px 8px 4px', overflow: 'hidden' }}>
-                        <p style={{ fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
-                      </div>
-                      {/* Metrics */}
-                      {[fmtROAS(c.roas), fmtBRL(c.spend), fmtBRL(c.revenue), fmtPct(c.ctr), fmtPct(c.hook_rate), fmtPct(c.body_rate), c.cpa > 0 ? fmtBRL(c.cpa) : '—', String(Math.round(c.purchases))].map((val, i) => (
-                        <div key={i} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', textAlign: 'right' }}>{val}</div>
-                      ))}
-                    </div>
-
-                    {/* Expanded video */}
-                    {isExpanded && (
-                      <div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--bg-border)', display: 'flex', gap: '20px', alignItems: 'flex-start', background: 'var(--bg-elevated)' }}>
-                        {c.link ? (
-                          <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '100px', borderRadius: '6px', aspectRatio: '9/16', background: '#000', flexShrink: 0 }} />
-                        ) : (
-                          <div style={{ width: '100px', aspectRatio: '9/16', borderRadius: '6px', border: '1px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => openPicker(c.ad_name)}>
-                            <Link2 size={16} color="var(--text-muted)" />
-                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center' }}>Vincular vídeo</span>
-                          </div>
-                        )}
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
-                            <MetricRow label="Impressões" value={fmtInt(c.impressions)} />
-                            <MetricRow label="Cliques" value={fmtInt(c.clicks)} />
-                            <MetricRow label="CPM" value={fmtBRL(c.cpm)} />
-                            <MetricRow label="CPC" value={c.cpc > 0 ? fmtBRL(c.cpc) : '—'} />
-                            <MetricRow label="Video Views" value={fmtInt(c.video_views)} />
-                            <MetricRow label="LP Views" value={fmtInt(c.lp_views)} />
-                            <MetricRow label="3s VV" value={fmtInt(c.video_3s)} />
-                            <MetricRow label="Ticket Médio" value={c.avg_ticket > 0 ? fmtBRL(c.avg_ticket) : '—'} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+        <TableView creatives={sorted} onLink={openPicker} />
       )}
 
       {/* No results after filter */}
