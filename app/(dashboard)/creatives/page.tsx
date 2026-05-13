@@ -841,6 +841,7 @@ export default function CreativesPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
+  const [syncDebug, setSyncDebug] = useState<string | null>(null)
 
   // Seletor manual de arquivo Dropbox por criativo
   const [pickingFor, setPickingFor] = useState<string | null>(null)
@@ -963,8 +964,8 @@ export default function CreativesPage() {
       let data: {
         matched?: number; total_files?: number; name_matches?: number; link_fails?: number
         error?: string; upsert_error?: string; debug_files?: string[]; debug_ads?: string[]
-        debug_first_file_tokens?: string[]; debug_first_ad_tokens?: string[]; debug_first_score?: number
-        debug_link?: unknown
+        debug_skipped_duplicate?: { file: string; ad: string; score: number }[]
+        debug_skipped_no_match?: { file: string; bestAd: string; bestScore: number }[]
       }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
@@ -974,24 +975,22 @@ export default function CreativesPage() {
       } else {
         const matched = data.matched ?? 0
         const total = data.total_files ?? 0
-        const nameMatches = data.name_matches ?? 0
-        const linkFails = data.link_fails ?? 0
         setSyncResult({ matched, total })
-        if (matched === 0 && total > 0) {
-          const fileSample = (data.debug_files ?? []).map((s) => `  "${s}"`).join('\n')
-          const adSample = (data.debug_ads ?? []).map((s) => `  "${s}"`).join('\n')
-          const fileTokens = (data.debug_first_file_tokens ?? []).join(', ')
-          const adTokens = (data.debug_first_ad_tokens ?? []).join(', ')
-          const score = data.debug_first_score ?? -1
-          setSyncError(
-            `0 vinculados de ${total} arquivos.\n` +
-            `• Nomes que bateram: ${nameMatches} | Links que falharam: ${linkFails}\n\n` +
-            `Tokens 1º arquivo: [${fileTokens}]\n` +
-            `Tokens 1º ad: [${adTokens}]\n` +
-            `Score: ${score}\n\n` +
-            `Arquivos Dropbox (amostra):\n${fileSample}\n\n` +
-            `Criativos:\n${adSample}`
+        if (matched < total) {
+          const dup = (data.debug_skipped_duplicate ?? [])
+            .map((d) => `  arquivo: "${d.file}"\n  tentou: "${d.ad}" (score ${d.score})`).join('\n\n')
+          const noMatch = (data.debug_skipped_no_match ?? [])
+            .map((d) => `  arquivo: "${d.file}"\n  melhor: "${d.bestAd}" (score ${d.bestScore})`).join('\n\n')
+          const fileSample = (data.debug_files ?? []).join('\n  ')
+          const adSample = (data.debug_ads ?? []).join('\n  ')
+          setSyncDebug(
+            `=== ARQUIVOS SEM MATCH (score=0) ===\n${noMatch || '  (nenhum)'}\n\n` +
+            `=== ARQUIVOS BLOQUEADOS (anúncio já vinculado) ===\n${dup || '  (nenhum)'}\n\n` +
+            `=== AMOSTRA ARQUIVOS DROPBOX ===\n  ${fileSample}\n\n` +
+            `=== AMOSTRA ANÚNCIOS ===\n  ${adSample}`
           )
+        } else {
+          setSyncDebug(null)
         }
         await fetchLinks()
       }
@@ -1409,6 +1408,11 @@ export default function CreativesPage() {
               {syncError && (
                 <pre style={{ fontSize: '11px', color: 'var(--status-error)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>
                   {syncError}
+                </pre>
+              )}
+              {syncDebug && (
+                <pre style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'monospace', background: 'var(--bg-muted)', padding: '8px', borderRadius: 'var(--radius-sm)' }}>
+                  {syncDebug}
                 </pre>
               )}
             </div>

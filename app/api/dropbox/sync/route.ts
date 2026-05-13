@@ -127,11 +127,8 @@ export async function POST(req: Request) {
     let nameMatchCount = 0
     let linkFailCount = 0
 
-    const firstFileTokens = filesToMatch.length > 0 ? getTokens(filesToMatch[0].name) : []
-    const firstAdTokens = ad_names.length > 0 ? getTokens(ad_names[0]) : []
-    const firstScore = firstFileTokens.length > 0 && ad_names.length > 0
-      ? scoreMatch(firstFileTokens, ad_names[0])
-      : -1
+    const skippedDuplicate: { file: string; ad: string; score: number }[] = []
+    const skippedNoMatch: { file: string; bestAd: string; bestScore: number }[] = []
 
     for (const file of filesToMatch) {
       const fileTokens = getTokens(file.name)
@@ -149,8 +146,14 @@ export async function POST(req: Request) {
         }
       }
 
-      if (!bestAd || bestScore === 0) continue
-      if (matchedAds.has(bestAd)) continue
+      if (!bestAd || bestScore === 0) {
+        if (skippedNoMatch.length < 5) skippedNoMatch.push({ file: file.name, bestAd: bestAd ?? '—', bestScore })
+        continue
+      }
+      if (matchedAds.has(bestAd)) {
+        if (skippedDuplicate.length < 5) skippedDuplicate.push({ file: file.name, ad: bestAd, score: bestScore })
+        continue
+      }
       nameMatchCount++
 
       const directUrl = await getTemporaryLink(token, file.path_lower)
@@ -184,11 +187,10 @@ export async function POST(req: Request) {
       name_matches: nameMatchCount,
       link_fails: linkFailCount,
       matches: matches.map((m) => m.ad_name),
-      debug_files: filesToMatch.slice(0, 5).map((f) => f.name.replace(/\.[^/.]+$/, '')),
-      debug_ads: ad_names.slice(0, 8),
-      debug_first_file_tokens: firstFileTokens,
-      debug_first_ad_tokens: firstAdTokens,
-      debug_first_score: firstScore,
+      debug_files: filesToMatch.slice(0, 5).map((f) => f.name),
+      debug_ads: ad_names.slice(0, 5),
+      debug_skipped_duplicate: skippedDuplicate,
+      debug_skipped_no_match: skippedNoMatch,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
