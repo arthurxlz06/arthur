@@ -894,6 +894,7 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
   })
   const [showColPicker, setShowColPicker] = useState(false)
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null)
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null)
   const colPickerRef = useRef<HTMLDivElement>(null)
 
@@ -983,8 +984,8 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
         <div style={{ minWidth: `${64 + nameWidth + visibleCols.reduce((s, c) => s + getW(c.key, c.defaultWidth), 0)}px` }}>
           {/* Header */}
           <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, background: 'var(--bg-elevated)', borderBottom: '2px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 10 }}>
-            <div style={{ padding: '9px 8px' }} />
-            <div style={{ position: 'relative', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', userSelect: 'none' }}>
+            <div style={{ padding: '9px 8px', position: 'sticky', left: 0, zIndex: 4, background: 'var(--bg-elevated)' }} />
+            <div style={{ position: 'sticky', left: '64px', zIndex: 4, background: 'var(--bg-elevated)', borderRight: '2px solid var(--bg-border)', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', userSelect: 'none' }}>
               CRIATIVO
               <div title="Arrastar para redimensionar" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }} onMouseDown={(e) => startResize('name', nameWidth, e)} />
             </div>
@@ -1006,12 +1007,12 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
             return (
               <div key={c.ad_id} style={{ borderBottom: '1px solid var(--bg-border)' }}>
                 <div
-                  style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', cursor: 'pointer', transition: 'background 80ms' }}
+                  style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', cursor: 'pointer', transition: 'background 80ms', background: hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'transparent' }}
                   onClick={() => setExpandedRow(isExpanded ? null : c.ad_id)}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)' }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                  onMouseEnter={() => setHoveredRow(c.ad_id)}
+                  onMouseLeave={() => setHoveredRow(null)}
                 >
-                  <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'sticky', left: 0, zIndex: 2, background: hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'var(--bg-surface)' }}>
                     {c.link ? (
                       <div style={{ position: 'relative', width: '36px', height: '48px', borderRadius: '4px', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
                         <video src={c.link.dropbox_direct_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} preload="metadata" muted />
@@ -1025,7 +1026,7 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
                       </div>
                     )}
                   </div>
-                  <div style={{ padding: '8px 10px 8px 4px' }}>
+                  <div style={{ padding: '8px 10px 8px 4px', position: 'sticky', left: '64px', zIndex: 2, background: hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'var(--bg-surface)', borderRight: '2px solid var(--bg-border)' }}>
                     <p style={{ fontSize: '12px', color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: '1.4' }}>{c.ad_name}</p>
                   </div>
                   {visibleCols.map((col) => (
