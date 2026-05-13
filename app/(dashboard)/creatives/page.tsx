@@ -984,7 +984,6 @@ export default function CreativesPage() {
           setSyncError(
             `0 vinculados de ${total} arquivos.\n` +
             `• Nomes que bateram: ${nameMatches} | Links que falharam: ${linkFails}\n\n` +
-            `ERRO DROPBOX:\n${JSON.stringify(data.debug_link, null, 2)}\n\n` +
             `Tokens 1º arquivo: [${fileTokens}]\n` +
             `Tokens 1º ad: [${adTokens}]\n` +
             `Score: ${score}\n\n` +

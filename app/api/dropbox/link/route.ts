@@ -25,29 +25,18 @@ async function refreshDropboxToken(refreshToken: string): Promise<string | null>
   return data.access_token ?? null
 }
 
-async function getOrCreateSharedLink(token: string, path: string): Promise<string | null> {
-  const res = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
-  })
-  let data: { url?: string; error?: { '.tag'?: string; shared_link_already_exists?: { metadata?: { url?: string } } } }
-  try { data = await res.json() } catch { return null }
-  if (data.url) return data.url
-  const embedded = data.error?.shared_link_already_exists?.metadata?.url
-  if (embedded) return embedded
-  if (data.error?.['.tag'] === 'shared_link_already_exists') {
-    try {
-      const r = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-      const d = await r.json() as { links?: { url?: string }[] }
-      return d.links?.[0]?.url ?? null
-    } catch { return null }
+async function getTemporaryLink(token: string, path: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    })
+    const data = await res.json() as { link?: string }
+    return data.link ?? null
+  } catch {
+    return null
   }
-  return null
 }
 
 // GET — lista arquivos de uma pasta
@@ -119,28 +108,26 @@ export async function POST(req: Request) {
     const { file_path, ad_name } = await req.json() as { file_path: string; ad_name: string }
 
     let token = user.dropbox_access_token as string
-    let sharedUrl = await getOrCreateSharedLink(token, file_path)
+    let directUrl = await getTemporaryLink(token, file_path)
 
-    if (!sharedUrl && user.dropbox_refresh_token) {
+    if (!directUrl && user.dropbox_refresh_token) {
       const newToken = await refreshDropboxToken(user.dropbox_refresh_token as string)
       if (newToken) {
         token = newToken
         await supabase.from('users').update({ dropbox_access_token: newToken }).eq('id', user.id)
-        sharedUrl = await getOrCreateSharedLink(token, file_path)
+        directUrl = await getTemporaryLink(token, file_path)
       }
     }
 
-    if (!sharedUrl)
+    if (!directUrl)
       return NextResponse.json({ error: 'Não foi possível gerar link do Dropbox' }, { status: 500 })
 
-    const dropbox_direct_url = convertToEmbed(sharedUrl)
-
     await supabase.from('creative_links').upsert(
-      { user_id: user.id, ad_name, dropbox_url: sharedUrl, dropbox_direct_url },
+      { user_id: user.id, ad_name, dropbox_url: directUrl, dropbox_direct_url: directUrl },
       { onConflict: 'user_id,ad_name' }
     )
 
-    return NextResponse.json({ dropbox_url: sharedUrl, dropbox_direct_url })
+    return NextResponse.json({ dropbox_url: directUrl, dropbox_direct_url: directUrl })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

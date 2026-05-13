@@ -8,14 +8,6 @@ interface DropboxEntry {
   path_lower: string
 }
 
-interface DropboxSharedLink {
-  url?: string
-  error_summary?: string
-  error?: {
-    '.tag'?: string
-    shared_link_already_exists?: { metadata?: { url?: string } }
-  }
-}
 
 // Extrai tokens significativos: ao menos 4 chars e NÃO puramente numérico
 function getTokens(name: string): string[] {
@@ -75,45 +67,18 @@ async function listDropboxFolder(
   return (data.entries ?? []).filter((e) => e['.tag'] === 'file')
 }
 
-async function getOrCreateSharedLink(token: string, path: string): Promise<{ url: string | null; dbgCreate: unknown; dbgList: unknown }> {
-  let rawCreate: unknown = '__not_called__'
-  let rawList: unknown = null
+async function getTemporaryLink(token: string, path: string): Promise<string | null> {
   try {
-    const res = await fetch(
-      'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      }
-    )
-    rawCreate = await res.json()
-  } catch (e) {
-    return { url: null, dbgCreate: String(e), dbgList: null }
+    const res = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    })
+    const data = await res.json() as { link?: string }
+    return data.link ?? null
+  } catch {
+    return null
   }
-
-  const data = rawCreate as DropboxSharedLink
-  if (data.url) return { url: data.url, dbgCreate: null, dbgList: null }
-
-  const embeddedUrl = data.error?.shared_link_already_exists?.metadata?.url
-  if (embeddedUrl) return { url: embeddedUrl, dbgCreate: null, dbgList: null }
-
-  if (data.error?.['.tag'] === 'shared_link_already_exists') {
-    try {
-      const listRes = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-      rawList = await listRes.json()
-      const url = (rawList as { links?: { url?: string }[] }).links?.[0]?.url ?? null
-      return { url, dbgCreate: url ? null : rawCreate, dbgList: url ? null : rawList }
-    } catch (e) {
-      return { url: null, dbgCreate: rawCreate, dbgList: String(e) }
-    }
-  }
-
-  return { url: null, dbgCreate: rawCreate, dbgList: null }
 }
 
 export async function POST(req: Request) {
@@ -167,7 +132,6 @@ export async function POST(req: Request) {
     const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
     let nameMatchCount = 0
     let linkFailCount = 0
-    let firstLinkDebug: { dbgCreate: unknown; dbgList: unknown } | null = null
 
     const firstFileTokens = filesToMatch.length > 0 ? getTokens(filesToMatch[0].name) : []
     const firstAdTokens = ad_names.length > 0 ? getTokens(ad_names[0]) : []
@@ -194,15 +158,13 @@ export async function POST(req: Request) {
       if (!bestAd || bestScore === 0) continue
       nameMatchCount++
 
-      const { url: sharedUrl, dbgCreate, dbgList } = await getOrCreateSharedLink(token, file.path_lower)
-      if (!sharedUrl) {
+      const directUrl = await getTemporaryLink(token, file.path_lower)
+      if (!directUrl) {
         linkFailCount++
-        if (!firstLinkDebug) firstLinkDebug = { dbgCreate, dbgList }
         continue
       }
 
-      const directUrl = convertSharedLinkToEmbed(sharedUrl)
-      matches.push({ ad_name: bestAd, dropbox_url: sharedUrl, dropbox_direct_url: directUrl })
+      matches.push({ ad_name: bestAd, dropbox_url: directUrl, dropbox_direct_url: directUrl })
     }
 
     if (matches.length > 0) {
@@ -228,7 +190,6 @@ export async function POST(req: Request) {
       debug_first_file_tokens: firstFileTokens,
       debug_first_ad_tokens: firstAdTokens,
       debug_first_score: firstScore,
-      debug_link: firstLinkDebug ?? 'nenhuma_falha_capturada',
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
