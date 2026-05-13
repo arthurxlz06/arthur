@@ -12,8 +12,12 @@ import {
   ArrowUpDown,
   Filter,
   Bookmark,
-  Trash2,
   RefreshCw,
+  LayoutGrid,
+  List,
+  Play,
+  SlidersHorizontal,
+  FolderOpen,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -635,6 +639,116 @@ function CsvImportModal({
   )
 }
 
+// ─── Filter Modal ─────────────────────────────────────────────────────────────
+
+function FilterModal({
+  filters,
+  onClose,
+  onChange,
+  onClear,
+  savedFilterSets,
+  onSaveFilterSet,
+  onApplyFilterSet,
+  onDeleteFilterSet,
+}: {
+  filters: Filters
+  onClose: () => void
+  onChange: (k: keyof Filters, v: string) => void
+  onClear: () => void
+  savedFilterSets: SavedFilterSet[]
+  onSaveFilterSet: (name: string) => void
+  onApplyFilterSet: (set: SavedFilterSet) => void
+  onDeleteFilterSet: (name: string) => void
+}) {
+  const [saveName, setSaveName] = useState('')
+  const [showSave, setShowSave] = useState(false)
+  const activeCount = Object.entries(filters).filter(([k, v]) => k !== 'search' && v !== '').length
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', width: '100%', maxWidth: '520px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--bg-border)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>Filtros</span>
+            {activeCount > 0 && <span style={{ background: 'var(--accent)', color: 'white', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: '600' }}>{activeCount} ativos</span>}
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {activeCount > 0 && (
+              <button onClick={onClear} style={{ fontSize: '12px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                Limpar todos
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '0.08em', marginBottom: '6px' }}>RESULTADO</p>
+          <FilterRow label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={onChange} />
+          <FilterRow label="Receita" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={onChange} placeholder="R$" />
+          <FilterRow label="CPA" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={onChange} placeholder="R$" />
+
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '0.08em', marginBottom: '6px', marginTop: '16px' }}>INVESTIMENTO</p>
+          <FilterRow label="Gasto" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={onChange} placeholder="R$" />
+
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '0.08em', marginBottom: '6px', marginTop: '16px' }}>ENGAJAMENTO</p>
+          <FilterRow label="CTR" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={onChange} placeholder="%" />
+          <FilterRow label="Hook Rate" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={onChange} placeholder="%" />
+        </div>
+
+        {/* Footer — saved sets */}
+        <div style={{ borderTop: '1px solid var(--bg-border)', padding: '14px 20px', flexShrink: 0 }}>
+          {savedFilterSets.length > 0 && (
+            <>
+              <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '0.08em', marginBottom: '8px' }}>FILTROS SALVOS</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                {savedFilterSets.map((set) => (
+                  <div key={set.name} style={{ display: 'flex', alignItems: 'center', gap: '0', borderRadius: '20px', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                    <button onClick={() => { onApplyFilterSet(set); onClose() }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '12px', padding: '4px 10px' }}>
+                      {set.name}
+                    </button>
+                    <button onClick={() => onDeleteFilterSet(set.name)} style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--bg-border)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '4px 8px' }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {showSave ? (
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <input
+                autoFocus type="text" placeholder="Nome do filtro..."
+                value={saveName} onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && saveName.trim()) { onSaveFilterSet(saveName.trim()); setSaveName(''); setShowSave(false) }
+                  if (e.key === 'Escape') setShowSave(false)
+                }}
+                style={{ flex: 1, padding: '7px 10px', fontSize: '13px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' as const }}
+              />
+              <button onClick={() => { if (saveName.trim()) { onSaveFilterSet(saveName.trim()); setSaveName(''); setShowSave(false) } }} disabled={!saveName.trim()} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: saveName.trim() ? 'pointer' : 'not-allowed', fontSize: '12px', opacity: saveName.trim() ? 1 : 0.5 }}>
+                <Check size={12} /> Salvar
+              </button>
+              <button onClick={() => setShowSave(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={14} /></button>
+            </div>
+          ) : (
+            <button onClick={() => setShowSave(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}>
+              <Bookmark size={12} /> Salvar filtros atuais
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Filter Row ───────────────────────────────────────────────────────────────
 
 function FilterRow({
@@ -820,8 +934,6 @@ export default function CreativesPage() {
   })
 
   const [savedFilterSets, setSavedFilterSets] = useState<SavedFilterSet[]>([])
-  const [saveFilterName, setSaveFilterName] = useState('')
-  const [showSaveInput, setShowSaveInput] = useState(false)
 
   const [linkModal, setLinkModal] = useState<string | null>(null)
   const [showCsvModal, setShowCsvModal] = useState(false)
@@ -846,6 +958,11 @@ export default function CreativesPage() {
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
   const [syncDebug, setSyncDebug] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
+    try { return (localStorage.getItem('creatives_view') as 'grid' | 'table') ?? 'grid' }
+    catch { return 'grid' }
+  })
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   // Seletor manual de arquivo Dropbox por criativo
   const [pickingFor, setPickingFor] = useState<string | null>(null)
@@ -879,14 +996,11 @@ export default function CreativesPage() {
     localStorage.setItem(LS_KEY, JSON.stringify(sets))
   }
 
-  const handleSaveFilterSet = () => {
-    const name = saveFilterName.trim()
+  const handleSaveFilterSet = (name: string) => {
     if (!name) return
     const newSet: SavedFilterSet = { name, filters, sortField, sortDir }
     const updated = [...savedFilterSets.filter((s) => s.name !== name), newSet]
     persistSavedSets(updated)
-    setSaveFilterName('')
-    setShowSaveInput(false)
   }
 
   const handleApplyFilterSet = (set: SavedFilterSet) => {
@@ -1245,7 +1359,7 @@ export default function CreativesPage() {
             onClick={() => fetchAds(true)}
             disabled={loadingAds || !selectedAccount || ads.length === 0}
             title="Atualizar métricas sem substituir criativos existentes"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: ads.length === 0 ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: loadingAds || ads.length === 0 ? 'not-allowed' : 'pointer', opacity: ads.length === 0 ? 0.4 : 1 }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: 'var(--radius-sm)', border: 'none', background: ads.length === 0 ? 'var(--bg-elevated)' : 'var(--accent)', color: ads.length === 0 ? 'var(--text-muted)' : 'white', cursor: loadingAds || ads.length === 0 ? 'not-allowed' : 'pointer', opacity: ads.length === 0 ? 0.4 : 1 }}
           >
             <RefreshCw size={14} style={{ animation: loadingAds && ads.length > 0 ? 'spin 0.8s linear infinite' : 'none' }} />
           </button>
@@ -1321,152 +1435,159 @@ export default function CreativesPage() {
 
         {/* Folder browser (collapsible) */}
         {dropboxConnected === true && showFolderBrowser && (
-          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--bg-border)', background: 'var(--bg-elevated)' }}>
-            {/* Breadcrumb */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '10px', flexWrap: 'wrap' }}>
-              <button onClick={() => browseDropbox('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: dropboxBrowsePath === '' ? 'var(--text-primary)' : 'var(--accent)', padding: '2px 4px', borderRadius: '4px', fontWeight: '500' }}>
+          <div style={{ borderTop: '1px solid var(--bg-border)' }}>
+            {/* Breadcrumb nav */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0', padding: '10px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--bg-border)', overflowX: 'auto' }}>
+              <button onClick={() => browseDropbox('')} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: dropboxBrowsePath === '' ? 'rgba(91,110,245,0.1)' : 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: dropboxBrowsePath === '' ? 'var(--accent)' : 'var(--text-secondary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '500', flexShrink: 0 }}>
+                <FolderOpen size={13} />
                 Raiz
               </button>
               {dropboxBrowsePath.split('/').filter(Boolean).map((segment: string, i: number, arr: string[]) => {
                 const path = '/' + arr.slice(0, i + 1).join('/')
+                const isLast = i === arr.length - 1
                 return (
-                  <span key={path} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/</span>
-                    <button onClick={() => browseDropbox(path)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: i === arr.length - 1 ? 'var(--text-primary)' : 'var(--accent)', padding: '2px 4px', borderRadius: '4px', fontWeight: i === arr.length - 1 ? '500' : '400' }}>
+                  <span key={path} style={{ display: 'flex', alignItems: 'center', gap: '0', flexShrink: 0 }}>
+                    <ChevronDown size={12} color="var(--text-muted)" style={{ transform: 'rotate(-90deg)', margin: '0 2px' }} />
+                    <button onClick={() => browseDropbox(path)} style={{ background: isLast ? 'rgba(91,110,245,0.1)' : 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: isLast ? 'var(--accent)' : 'var(--text-secondary)', padding: '4px 8px', borderRadius: '6px', fontWeight: isLast ? '500' : '400' }}>
                       {segment}
                     </button>
                   </span>
                 )
               })}
-              {dropboxBrowseLoading && <Spinner size={11} />}
+              {dropboxBrowseLoading && <Spinner size={12} />}
             </div>
 
-            {/* Folders */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+            {/* Folder grid */}
+            <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px', minHeight: '80px', background: 'var(--bg-surface)' }}>
               {dropboxBrowsePath !== '' && (
-                <button onClick={() => browseDropbox(dropboxBrowsePath.split('/').slice(0, -1).join('/') || '')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}>
-                  ← Voltar
+                <button
+                  onClick={() => browseDropbox(dropboxBrowsePath.split('/').slice(0, -1).join('/') || '')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--bg-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', textAlign: 'left' }}
+                >
+                  <ChevronUp size={14} />
+                  Voltar
                 </button>
               )}
               {dropboxFolders.map((f) => (
-                <button key={f.path} onClick={() => browseDropbox(f.path)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '12px' }}>
-                  📁 {f.name}
+                <button
+                  key={f.path}
+                  onClick={() => browseDropbox(f.path)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '12px', textAlign: 'left', transition: 'border-color 150ms' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--bg-border)' }}
+                >
+                  <FolderOpen size={14} color="#0061FF" style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
                 </button>
               ))}
               {!dropboxBrowseLoading && dropboxFolders.length === 0 && !dropboxBrowseError && (
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem subpastas</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px 0', gridColumn: '1 / -1' }}>Sem subpastas neste diretório</span>
               )}
-              {dropboxBrowseError && <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{dropboxBrowseError}</span>}
+              {dropboxBrowseError && (
+                <span style={{ fontSize: '12px', color: 'var(--status-error)', padding: '10px 0', gridColumn: '1 / -1' }}>{dropboxBrowseError}</span>
+              )}
             </div>
 
-            <button
-              onClick={() => { setDropboxFolder(dropboxBrowsePath); setShowFolderBrowser(false) }}
-              style={{ padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: `1px solid ${dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--bg-border)'}`, background: dropboxFolder === dropboxBrowsePath ? 'rgba(91,110,245,0.1)' : 'transparent', color: dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
-            >
-              {dropboxFolder === dropboxBrowsePath ? '✓ Pasta selecionada' : 'Usar esta pasta'}
-            </button>
+            {/* Confirm selection */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {dropboxBrowsePath || '/'}
+              </span>
+              <button
+                onClick={() => { setDropboxFolder(dropboxBrowsePath); setShowFolderBrowser(false) }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: 'var(--radius-sm)', border: 'none', background: dropboxFolder === dropboxBrowsePath ? 'rgba(91,110,245,0.15)' : 'var(--accent)', color: dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '500', flexShrink: 0 }}
+              >
+                {dropboxFolder === dropboxBrowsePath ? <><Check size={13} /> Selecionada</> : 'Usar esta pasta'}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {/* ── Search + Sort + Filter bar ────────────────── */}
-      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', marginBottom: '10px', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 14px' }}>
-          <Filter size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Filtrar por nome do anúncio..."
-            value={filters.search}
-            onChange={(e) => setFilter('search', e.target.value)}
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text-primary)', minWidth: 0 }}
-          />
-          {filters.search && (
-            <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', flexShrink: 0 }}>
-              <X size={13} />
-            </button>
-          )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 14px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', marginBottom: '10px' }}>
+        <Filter size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+        <input
+          type="text"
+          placeholder="Filtrar por nome do anúncio..."
+          value={filters.search}
+          onChange={(e) => setFilter('search', e.target.value)}
+          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text-primary)', minWidth: 0 }}
+        />
+        {filters.search && (
+          <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', flexShrink: 0 }}>
+            <X size={13} />
+          </button>
+        )}
 
-          <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0, marginLeft: '4px' }} />
+        <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0, margin: '0 4px' }} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-            <ArrowUpDown size={12} color="var(--text-muted)" />
-            <select value={sortField} onChange={(e) => setSortField(e.target.value as SortField)} style={{ ...selectStyle, fontSize: '12px', padding: '4px 8px', border: 'none', background: 'transparent', color: 'var(--text-secondary)' }}>
-              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <button onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')} style={{ display: 'flex', alignItems: 'center', padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              {sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            </button>
-          </div>
-
-          <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0 }} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-            {activeFiltersCount > 0 && (
-              <button onClick={() => setFilters(DEFAULT_FILTERS)} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px' }}>
-                <X size={10} /> Limpar
-              </button>
-            )}
-            <button
-              onClick={() => setShowFilters((v) => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`, background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'transparent', color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: activeFiltersCount > 0 ? '500' : '400' }}
-            >
-              <Filter size={11} />
-              Filtros
-              {activeFiltersCount > 0 && (
-                <span style={{ background: 'var(--accent)', color: 'white', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: '600' }}>
-                  {activeFiltersCount}
-                </span>
-              )}
-            </button>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <ArrowUpDown size={12} color="var(--text-muted)" />
+          <select value={sortField} onChange={(e) => setSortField(e.target.value as SortField)} style={{ ...selectStyle, fontSize: '12px', padding: '4px 8px', border: 'none', background: 'transparent', color: 'var(--text-secondary)' }}>
+            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <button onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')} style={{ display: 'flex', alignItems: 'center', padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            {sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+          </button>
         </div>
 
-        {/* Filter panel */}
-        {showFilters && (
-          <div style={{ borderTop: '1px solid var(--bg-border)', padding: '8px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <FilterRow label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
-              <FilterRow label="Gasto" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} placeholder="R$" />
-              <FilterRow label="Receita" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} placeholder="R$" />
-              <FilterRow label="CPA" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} placeholder="R$" />
-              <FilterRow label="CTR" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} placeholder="%" />
-              <FilterRow label="Hook Rate" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} placeholder="%" />
-            </div>
+        <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0, margin: '0 4px' }} />
 
-            <div style={{ borderTop: '1px solid var(--bg-border)', marginTop: '8px', paddingTop: '10px', padding: '10px 12px 4px' }}>
-              {savedFilterSets.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                  {savedFilterSets.map((set) => (
-                    <div key={set.name} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px 3px 10px', borderRadius: '20px', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', fontSize: '12px' }}>
-                      <button onClick={() => handleApplyFilterSet(set)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '12px', padding: 0 }}>
-                        {set.name}
-                      </button>
-                      <button onClick={() => handleDeleteFilterSet(set.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '1px' }}>
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {showSaveInput ? (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <input autoFocus type="text" placeholder="Nome do filtro..." value={saveFilterName} onChange={(e) => setSaveFilterName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveFilterSet(); if (e.key === 'Escape') { setShowSaveInput(false); setSaveFilterName('') } }} style={{ ...rangeInputStyle, width: '180px', paddingLeft: '10px' }} />
-                  <button onClick={handleSaveFilterSet} disabled={!saveFilterName.trim()} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: saveFilterName.trim() ? 'pointer' : 'not-allowed', fontSize: '12px', opacity: saveFilterName.trim() ? 1 : 0.5 }}>
-                    <Check size={12} /> Salvar
-                  </button>
-                  <button onClick={() => { setShowSaveInput(false); setSaveFilterName('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => setShowSaveInput(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}>
-                  <Bookmark size={12} /> Salvar filtros atuais
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+        {/* View mode toggle */}
+        <div style={{ display: 'flex', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', flexShrink: 0 }}>
+          <button
+            onClick={() => { setViewMode('grid'); localStorage.setItem('creatives_view', 'grid') }}
+            title="Visualização em grade"
+            style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', border: 'none', background: viewMode === 'grid' ? 'var(--accent)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'var(--text-muted)', cursor: 'pointer' }}
+          >
+            <LayoutGrid size={13} />
+          </button>
+          <button
+            onClick={() => { setViewMode('table'); localStorage.setItem('creatives_view', 'table') }}
+            title="Visualização em tabela"
+            style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', border: 'none', borderLeft: '1px solid var(--bg-border)', background: viewMode === 'table' ? 'var(--accent)' : 'transparent', color: viewMode === 'table' ? 'white' : 'var(--text-muted)', cursor: 'pointer' }}
+          >
+            <List size={13} />
+          </button>
+        </div>
+
+        <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0, margin: '0 4px' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          {activeFiltersCount > 0 && (
+            <button onClick={() => setFilters(DEFAULT_FILTERS)} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px' }}>
+              <X size={10} /> Limpar
+            </button>
+          )}
+          <button
+            onClick={() => setShowFilters(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 11px', borderRadius: 'var(--radius-sm)', border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`, background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'transparent', color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: activeFiltersCount > 0 ? '500' : '400' }}
+          >
+            <SlidersHorizontal size={12} />
+            Filtros
+            {activeFiltersCount > 0 && (
+              <span style={{ background: 'var(--accent)', color: 'white', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: '600' }}>
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Filter Modal */}
+      {showFilters && (
+        <FilterModal
+          filters={filters}
+          onClose={() => setShowFilters(false)}
+          onChange={setFilter}
+          onClear={() => setFilters(DEFAULT_FILTERS)}
+          savedFilterSets={savedFilterSets}
+          onSaveFilterSet={handleSaveFilterSet}
+          onApplyFilterSet={handleApplyFilterSet}
+          onDeleteFilterSet={handleDeleteFilterSet}
+        />
+      )}
 
       {/* Warning (rate limit com fallback de cache) */}
       {adsWarning && (
@@ -1520,22 +1641,97 @@ export default function CreativesPage() {
         </div>
       )}
 
-      {/* Grid */}
-      {!loadingAds && sorted.length > 0 && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: '12px',
-          }}
-        >
+      {/* Grid view */}
+      {!loadingAds && sorted.length > 0 && viewMode === 'grid' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
           {sorted.map((c) => (
-            <CreativeCard
-              key={c.ad_id}
-              creative={c}
-              onLink={(adName) => openPicker(adName)}
-            />
+            <CreativeCard key={c.ad_id} creative={c} onLink={(adName) => openPicker(adName)} />
           ))}
+        </div>
+      )}
+
+      {/* Table view */}
+      {!loadingAds && sorted.length > 0 && viewMode === 'table' && (
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: '860px' }}>
+              {/* Table header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 80px 96px 96px 70px 72px 72px 82px 70px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--bg-border)' }}>
+                {['', 'Criativo', 'ROAS', 'Gasto', 'Receita', 'CTR', 'Hook', 'Body', 'CPA', 'Vendas'].map((h, i) => (
+                  <div key={i} style={{ padding: '8px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.04em', textAlign: i > 1 ? 'right' : 'left' }}>{h}</div>
+                ))}
+              </div>
+
+              {/* Table rows */}
+              {sorted.map((c) => {
+                const isExpanded = expandedRow === c.ad_id
+                return (
+                  <div key={c.ad_id} style={{ borderBottom: '1px solid var(--bg-border)' }}>
+                    <div
+                      style={{ display: 'grid', gridTemplateColumns: '64px 1fr 80px 96px 96px 70px 72px 72px 82px 70px', alignItems: 'center', cursor: 'pointer' }}
+                      onClick={() => setExpandedRow(isExpanded ? null : c.ad_id)}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)' }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
+                      {/* Thumbnail */}
+                      <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {c.link ? (
+                          <div style={{ position: 'relative', width: '36px', height: '48px', borderRadius: '4px', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
+                            <video src={c.link.dropbox_direct_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} preload="metadata" muted />
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
+                              <Play size={11} color="white" fill="white" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            style={{ width: '36px', height: '48px', borderRadius: '4px', border: '1px dashed var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={(e) => { e.stopPropagation(); openPicker(c.ad_name) }}
+                          >
+                            <Link2 size={12} color="var(--text-muted)" />
+                          </div>
+                        )}
+                      </div>
+                      {/* Name */}
+                      <div style={{ padding: '8px 10px 8px 4px', overflow: 'hidden' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
+                      </div>
+                      {/* Metrics */}
+                      {[fmtROAS(c.roas), fmtBRL(c.spend), fmtBRL(c.revenue), fmtPct(c.ctr), fmtPct(c.hook_rate), fmtPct(c.body_rate), c.cpa > 0 ? fmtBRL(c.cpa) : '—', String(Math.round(c.purchases))].map((val, i) => (
+                        <div key={i} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', textAlign: 'right' }}>{val}</div>
+                      ))}
+                    </div>
+
+                    {/* Expanded video */}
+                    {isExpanded && (
+                      <div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--bg-border)', display: 'flex', gap: '20px', alignItems: 'flex-start', background: 'var(--bg-elevated)' }}>
+                        {c.link ? (
+                          <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '100px', borderRadius: '6px', aspectRatio: '9/16', background: '#000', flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: '100px', aspectRatio: '9/16', borderRadius: '6px', border: '1px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => openPicker(c.ad_name)}>
+                            <Link2 size={16} color="var(--text-muted)" />
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center' }}>Vincular vídeo</span>
+                          </div>
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                            <MetricRow label="Impressões" value={fmtInt(c.impressions)} />
+                            <MetricRow label="Cliques" value={fmtInt(c.clicks)} />
+                            <MetricRow label="CPM" value={fmtBRL(c.cpm)} />
+                            <MetricRow label="CPC" value={c.cpc > 0 ? fmtBRL(c.cpc) : '—'} />
+                            <MetricRow label="Video Views" value={fmtInt(c.video_views)} />
+                            <MetricRow label="LP Views" value={fmtInt(c.lp_views)} />
+                            <MetricRow label="3s VV" value={fmtInt(c.video_3s)} />
+                            <MetricRow label="Ticket Médio" value={c.avg_ticket > 0 ? fmtBRL(c.avg_ticket) : '—'} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 
