@@ -838,6 +838,10 @@ export default function CreativesPage() {
     try { return JSON.parse(localStorage.getItem('creatives_dropbox') ?? '{}').folder ?? '' }
     catch { return '' }
   })
+  const [showFolderBrowser, setShowFolderBrowser] = useState(() => {
+    try { return !JSON.parse(localStorage.getItem('creatives_dropbox') ?? '{}').folder }
+    catch { return true }
+  })
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ matched: number; total: number } | null>(null)
   const [syncError, setSyncError] = useState('')
@@ -1193,509 +1197,276 @@ export default function CreativesPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          marginBottom: '24px',
-          flexWrap: 'wrap',
-          gap: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div>
-            <h1
-              style={{
-                fontSize: '24px',
-                fontWeight: '600',
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.03em',
-                marginBottom: '4px',
-              }}
-            >
-              Criativos
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-              {ads.length > 0
-                ? `${sorted.length} de ${ads.length} criativos`
-                : 'Selecione uma conta e período para carregar'}
-            </p>
-          </div>
-          {ads.length > 0 && (
-            <button
-              onClick={() => fetchAds(true)}
-              disabled={loadingAds}
-              title="Atualizar métricas e buscar criativos novos"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '34px', height: '34px',
-                borderRadius: 'var(--radius-sm)',
-                border: 'none', background: 'var(--accent)', color: 'white',
-                cursor: loadingAds ? 'wait' : 'pointer',
-                opacity: loadingAds ? 0.6 : 1, flexShrink: 0,
-              }}
-            >
-              <RefreshCw size={15} style={{ animation: loadingAds ? 'spin 0.8s linear infinite' : 'none' }} />
-            </button>
-          )}
+      {/* ── Header ────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div>
+          <h1 style={{ fontSize: '22px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.03em', marginBottom: '2px' }}>
+            Criativos
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            {ads.length > 0 ? `${sorted.length} de ${ads.length} criativos` : 'Selecione conta e período para carregar'}
+          </p>
         </div>
         <button
           onClick={() => setShowCsvModal(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 14px', borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--bg-border)', background: 'var(--bg-surface)',
-            color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '13px',
-          }}
+          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 13px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}
         >
-          <Upload size={13} />
-          Importar CSV
+          <Upload size={12} /> Importar CSV
         </button>
       </div>
 
-      {/* Dropbox panel */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--bg-border)',
-          borderRadius: 'var(--radius-md)',
-          padding: '14px 16px',
-          marginBottom: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <svg width="16" height="16" viewBox="0 0 40 40" fill="none">
+      {/* ── Query bar ─────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', flexWrap: 'wrap', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', padding: '12px 16px', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500', letterSpacing: '0.02em' }}>Conta</label>
+          <select value={selectedAccount} onChange={(e) => handleAccountChange(e.target.value)} style={selectStyle}>
+            {accounts.length === 0 && <option value="">Nenhuma conta</option>}
+            {accounts.map((a) => <option key={a.id} value={a.meta_account_id}>{a.name}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500', letterSpacing: '0.02em' }}>De</label>
+          <input type="date" value={since} onChange={(e) => handleSinceChange(e.target.value)} style={inputStyle} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500', letterSpacing: '0.02em' }}>Até</label>
+          <input type="date" value={until} onChange={(e) => handleUntilChange(e.target.value)} style={inputStyle} />
+        </div>
+        <button
+          onClick={() => fetchAds(false)}
+          disabled={loadingAds || !selectedAccount}
+          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 18px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '500', opacity: !selectedAccount ? 0.5 : 1 }}
+        >
+          {loadingAds && !ads.length ? <Spinner size={12} /> : null}
+          Buscar
+        </button>
+        <div style={{ marginLeft: 'auto' }}>
+          <button
+            onClick={() => fetchAds(true)}
+            disabled={loadingAds || !selectedAccount || ads.length === 0}
+            title="Atualizar métricas sem substituir criativos existentes"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: ads.length === 0 ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: loadingAds || ads.length === 0 ? 'not-allowed' : 'pointer', opacity: ads.length === 0 ? 0.4 : 1 }}
+          >
+            <RefreshCw size={14} style={{ animation: loadingAds && ads.length > 0 ? 'spin 0.8s linear infinite' : 'none' }} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Dropbox bar ───────────────────────────────── */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', marginBottom: '10px', overflow: 'hidden' }}>
+        {/* Main row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', flexWrap: 'wrap' }}>
+          <svg width="14" height="14" viewBox="0 0 40 40" fill="none" style={{ flexShrink: 0 }}>
             <path d="M10 4L20 10.5L10 17L0 10.5L10 4Z" fill="#0061FF"/>
             <path d="M30 4L40 10.5L30 17L20 10.5L30 4Z" fill="#0061FF"/>
             <path d="M0 23.5L10 17L20 23.5L10 30L0 23.5Z" fill="#0061FF"/>
             <path d="M20 23.5L30 17L40 23.5L30 30L20 23.5Z" fill="#0061FF"/>
             <path d="M10 31.5L20 25L30 31.5L20 38L10 31.5Z" fill="#0061FF"/>
           </svg>
-          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)' }}>Dropbox</span>
-        </div>
 
-        {dropboxConnected === null && (
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Verificando...</span>
-        )}
+          {dropboxConnected === null && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Verificando...</span>}
 
-        {dropboxConnected === false && (
-          <a
-            href="/api/dropbox/auth"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '5px',
-              padding: '6px 12px', borderRadius: 'var(--radius-sm)',
-              background: '#0061FF', color: 'white', textDecoration: 'none',
-              fontSize: '12px', fontWeight: '500',
-            }}
-          >
-            Conectar Dropbox
-          </a>
-        )}
+          {dropboxConnected === false && (
+            <a href="/api/dropbox/auth" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-sm)', background: '#0061FF', color: 'white', textDecoration: 'none', fontSize: '12px', fontWeight: '500' }}>
+              Conectar Dropbox
+            </a>
+          )}
 
-        {dropboxConnected === true && (
-          <>
-            <span style={{ fontSize: '12px', color: 'var(--status-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Check size={12} /> Conectado
-            </span>
+          {dropboxConnected === true && (
+            <>
+              <Check size={12} color="var(--status-success)" />
+              {dropboxFolder ? (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{dropboxFolder}</span>
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nenhuma pasta selecionada</span>
+              )}
+              <button
+                onClick={() => setShowFolderBrowser((v) => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: '3px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '12px', padding: '2px 4px' }}
+              >
+                {showFolderBrowser ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {dropboxFolder ? 'Trocar pasta' : 'Selecionar pasta'}
+              </button>
 
-            {/* Folder browser */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* Breadcrumb */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => browseDropbox('')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: dropboxBrowsePath === '' ? 'var(--text-primary)' : 'var(--accent)', padding: 0, fontWeight: '500' }}
-                >
-                  Raiz
-                </button>
-                {dropboxBrowsePath.split('/').filter(Boolean).map((segment: string, i: number, arr: string[]) => {
-                  const path = '/' + arr.slice(0, i + 1).join('/')
-                  return (
-                    <span key={path} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/</span>
-                      <button
-                        onClick={() => browseDropbox(path)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: i === arr.length - 1 ? 'var(--text-primary)' : 'var(--accent)', padding: 0, fontWeight: i === arr.length - 1 ? '500' : '400' }}
-                      >
-                        {segment}
-                      </button>
-                    </span>
-                  )
-                })}
-                {dropboxBrowseLoading && <Spinner size={12} />}
-              </div>
-
-              {/* Folder list */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                {dropboxBrowsePath !== '' && (
-                  <button
-                    onClick={() => {
-                      const parent = dropboxBrowsePath.split('/').slice(0, -1).join('/') || ''
-                      browseDropbox(parent)
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}
-                  >
-                    ← Voltar
-                  </button>
-                )}
-                {dropboxFolders.map((f) => (
-                  <button
-                    key={f.path}
-                    onClick={() => browseDropbox(f.path)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '12px' }}
-                  >
-                    📁 {f.name}
-                  </button>
-                ))}
-                {!dropboxBrowseLoading && dropboxFolders.length === 0 && !dropboxBrowseError && (
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem subpastas</span>
-                )}
-                {dropboxBrowseError && (
-                  <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{dropboxBrowseError}</span>
-                )}
-              </div>
-
-              {/* Select + sync current path */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => setDropboxFolder(dropboxBrowsePath)}
-                  style={{ padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--bg-border)'}`, background: dropboxFolder === dropboxBrowsePath ? 'rgba(91,110,245,0.1)' : 'transparent', color: dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
-                >
-                  {dropboxFolder === dropboxBrowsePath ? '✓ Pasta selecionada' : 'Usar esta pasta'}
-                </button>
-
-                {dropboxFolder !== '' && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {dropboxFolder === '' ? 'Raiz' : dropboxFolder}
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {syncResult && (
+                  <span style={{ fontSize: '12px', color: syncResult.matched === syncResult.total ? 'var(--status-success)' : 'var(--text-secondary)' }}>
+                    {syncResult.matched === syncResult.total ? '✓' : '⚠'} {syncResult.matched}/{syncResult.total} vinculados
                   </span>
                 )}
-              </div>
-
-              {/* Sync */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                {filters.search.trim() && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Sincronizando criativos com &quot;{filters.search}&quot;
-                  </span>
-                )}
-
                 <button
                   onClick={handleSync}
-                  disabled={syncing || ads.length === 0 || dropboxFolder === ''}
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: syncing || ads.length === 0 || dropboxFolder === '' ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: '500', opacity: ads.length === 0 || dropboxFolder === '' ? 0.5 : 1 }}
+                  disabled={syncing || ads.length === 0 || !dropboxFolder}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: syncing || ads.length === 0 || !dropboxFolder ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: '500', opacity: !dropboxFolder || ads.length === 0 ? 0.5 : 1 }}
                 >
                   {syncing ? <Spinner size={11} /> : <PlaySquare size={12} />}
                   {syncing ? 'Sincronizando...' : 'Sincronizar vídeos'}
                 </button>
-
-                {syncResult && (
-                  <span style={{ fontSize: '12px', color: 'var(--status-success)' }}>
-                    ✓ {syncResult.matched} de {syncResult.total} vinculados
-                  </span>
-                )}
               </div>
+            </>
+          )}
+        </div>
 
-              {syncError && (
-                <pre style={{ fontSize: '11px', color: 'var(--status-error)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>
-                  {syncError}
-                </pre>
-              )}
-              {syncDebug && (
-                <pre style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'monospace', background: 'var(--bg-muted)', padding: '8px', borderRadius: 'var(--radius-sm)' }}>
-                  {syncDebug}
-                </pre>
-              )}
+        {/* Feedback rows */}
+        {syncError && (
+          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--bg-border)', background: 'rgba(239,68,68,0.04)' }}>
+            <pre style={{ fontSize: '11px', color: 'var(--status-error)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{syncError}</pre>
+          </div>
+        )}
+        {syncDebug && (
+          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--bg-border)' }}>
+            <pre style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'monospace' }}>{syncDebug}</pre>
+          </div>
+        )}
+
+        {/* Folder browser (collapsible) */}
+        {dropboxConnected === true && showFolderBrowser && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--bg-border)', background: 'var(--bg-elevated)' }}>
+            {/* Breadcrumb */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              <button onClick={() => browseDropbox('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: dropboxBrowsePath === '' ? 'var(--text-primary)' : 'var(--accent)', padding: '2px 4px', borderRadius: '4px', fontWeight: '500' }}>
+                Raiz
+              </button>
+              {dropboxBrowsePath.split('/').filter(Boolean).map((segment: string, i: number, arr: string[]) => {
+                const path = '/' + arr.slice(0, i + 1).join('/')
+                return (
+                  <span key={path} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/</span>
+                    <button onClick={() => browseDropbox(path)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: i === arr.length - 1 ? 'var(--text-primary)' : 'var(--accent)', padding: '2px 4px', borderRadius: '4px', fontWeight: i === arr.length - 1 ? '500' : '400' }}>
+                      {segment}
+                    </button>
+                  </span>
+                )
+              })}
+              {dropboxBrowseLoading && <Spinner size={11} />}
             </div>
-          </>
+
+            {/* Folders */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+              {dropboxBrowsePath !== '' && (
+                <button onClick={() => browseDropbox(dropboxBrowsePath.split('/').slice(0, -1).join('/') || '')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}>
+                  ← Voltar
+                </button>
+              )}
+              {dropboxFolders.map((f) => (
+                <button key={f.path} onClick={() => browseDropbox(f.path)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '12px' }}>
+                  📁 {f.name}
+                </button>
+              ))}
+              {!dropboxBrowseLoading && dropboxFolders.length === 0 && !dropboxBrowseError && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sem subpastas</span>
+              )}
+              {dropboxBrowseError && <span style={{ fontSize: '12px', color: 'var(--status-error)' }}>{dropboxBrowseError}</span>}
+            </div>
+
+            <button
+              onClick={() => { setDropboxFolder(dropboxBrowsePath); setShowFolderBrowser(false) }}
+              style={{ padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: `1px solid ${dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--bg-border)'}`, background: dropboxFolder === dropboxBrowsePath ? 'rgba(91,110,245,0.1)' : 'transparent', color: dropboxFolder === dropboxBrowsePath ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
+            >
+              {dropboxFolder === dropboxBrowsePath ? '✓ Pasta selecionada' : 'Usar esta pasta'}
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Controls bar */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--bg-border)',
-          borderRadius: 'var(--radius-md)',
-          padding: '14px 16px',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: '12px',
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* Account selector */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>Conta</label>
-          <select
-            value={selectedAccount}
-            onChange={(e) => handleAccountChange(e.target.value)}
-            style={selectStyle}
-          >
-            {accounts.length === 0 && <option value="">Nenhuma conta selecionada</option>}
-            {accounts.map((a) => (
-              <option key={a.id} value={a.meta_account_id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Date range */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>De</label>
+      {/* ── Search + Sort + Filter bar ────────────────── */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', marginBottom: '10px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 14px' }}>
+          <Filter size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
           <input
-            type="date"
-            value={since}
-            onChange={(e) => handleSinceChange(e.target.value)}
-            style={inputStyle}
+            type="text"
+            placeholder="Filtrar por nome do anúncio..."
+            value={filters.search}
+            onChange={(e) => setFilter('search', e.target.value)}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text-primary)', minWidth: 0 }}
           />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>Até</label>
-          <input
-            type="date"
-            value={until}
-            onChange={(e) => handleUntilChange(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+          {filters.search && (
+            <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', flexShrink: 0 }}>
+              <X size={13} />
+            </button>
+          )}
 
-        <button
-          onClick={() => fetchAds(false)}
-          disabled={loadingAds || !selectedAccount}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '5px',
-            padding: '8px 16px', borderRadius: 'var(--radius-sm)',
-            border: 'none', background: 'var(--accent)', color: 'white',
-            cursor: loadingAds || !selectedAccount ? 'not-allowed' : 'pointer',
-            fontSize: '13px', fontWeight: '500',
-            opacity: !selectedAccount ? 0.5 : 1,
-          }}
-        >
-          {loadingAds ? <Spinner size={12} /> : null}
-          Buscar
-        </button>
+          <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0, marginLeft: '4px' }} />
 
-      </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            <ArrowUpDown size={12} color="var(--text-muted)" />
+            <select value={sortField} onChange={(e) => setSortField(e.target.value as SortField)} style={{ ...selectStyle, fontSize: '12px', padding: '4px 8px', border: 'none', background: 'transparent', color: 'var(--text-secondary)' }}>
+              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <button onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')} style={{ display: 'flex', alignItems: 'center', padding: '4px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              {sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            </button>
+          </div>
 
-      {/* Search bar — filtro por nome do anúncio */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '10px 14px',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--bg-border)',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '8px',
-        }}
-      >
-        <Filter size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-        <input
-          type="text"
-          placeholder="Filtrar anúncios por nome..."
-          value={filters.search}
-          onChange={(e) => setFilter('search', e.target.value)}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            fontSize: '14px',
-            color: 'var(--text-primary)',
-          }}
-        />
-        {filters.search && (
-          <button onClick={() => setFilter('search', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
-            <X size={14} />
-          </button>
-        )}
-      </div>
+          <div style={{ width: '1px', height: '18px', background: 'var(--bg-border)', flexShrink: 0 }} />
 
-      {/* Sort + Filter bar */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--bg-border)',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '12px',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Controls row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', flexWrap: 'wrap' }}>
-          <ArrowUpDown size={13} color="var(--text-muted)" />
-          <select
-            value={sortField}
-            onChange={(e) => setSortField(e.target.value as SortField)}
-            style={{ ...selectStyle, fontSize: '12px', padding: '5px 8px' }}
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '4px',
-              padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--bg-border)', background: 'transparent',
-              color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px',
-            }}
-          >
-            {sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            {sortDir === 'desc' ? 'Decrescente' : 'Crescente'}
-          </button>
-
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
             {activeFiltersCount > 0 && (
-              <button
-                onClick={() => setFilters(DEFAULT_FILTERS)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '4px',
-                  padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--bg-border)', background: 'transparent',
-                  color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px',
-                }}
-              >
-                <X size={11} /> Limpar filtros
+              <button onClick={() => setFilters(DEFAULT_FILTERS)} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px' }}>
+                <X size={10} /> Limpar
               </button>
             )}
             <button
               onClick={() => setShowFilters((v) => !v)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                padding: '5px 12px', borderRadius: 'var(--radius-sm)',
-                border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`,
-                background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'transparent',
-                color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)',
-                cursor: 'pointer', fontSize: '12px', fontWeight: activeFiltersCount > 0 ? '500' : '400',
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--bg-border)'}`, background: activeFiltersCount > 0 ? 'rgba(91,110,245,0.08)' : 'transparent', color: activeFiltersCount > 0 ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px', fontWeight: activeFiltersCount > 0 ? '500' : '400' }}
             >
-              <Filter size={12} />
-              {showFilters ? 'Fechar filtros' : 'Filtros'}
+              <Filter size={11} />
+              Filtros
               {activeFiltersCount > 0 && (
-                <span style={{
-                  background: 'var(--accent)', color: 'white',
-                  borderRadius: '10px', padding: '1px 6px',
-                  fontSize: '10px', fontWeight: '600',
-                }}>
+                <span style={{ background: 'var(--accent)', color: 'white', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: '600' }}>
                   {activeFiltersCount}
                 </span>
               )}
             </button>
           </div>
         </div>
+
+        {/* Filter panel */}
+        {showFilters && (
+          <div style={{ borderTop: '1px solid var(--bg-border)', padding: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <FilterRow label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
+              <FilterRow label="Gasto" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} placeholder="R$" />
+              <FilterRow label="Receita" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} placeholder="R$" />
+              <FilterRow label="CPA" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} placeholder="R$" />
+              <FilterRow label="CTR" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} placeholder="%" />
+              <FilterRow label="Hook Rate" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} placeholder="%" />
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--bg-border)', marginTop: '8px', paddingTop: '10px', padding: '10px 12px 4px' }}>
+              {savedFilterSets.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                  {savedFilterSets.map((set) => (
+                    <div key={set.name} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px 3px 10px', borderRadius: '20px', border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)', fontSize: '12px' }}>
+                      <button onClick={() => handleApplyFilterSet(set)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '12px', padding: 0 }}>
+                        {set.name}
+                      </button>
+                      <button onClick={() => handleDeleteFilterSet(set.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '1px' }}>
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showSaveInput ? (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input autoFocus type="text" placeholder="Nome do filtro..." value={saveFilterName} onChange={(e) => setSaveFilterName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveFilterSet(); if (e.key === 'Escape') { setShowSaveInput(false); setSaveFilterName('') } }} style={{ ...rangeInputStyle, width: '180px', paddingLeft: '10px' }} />
+                  <button onClick={handleSaveFilterSet} disabled={!saveFilterName.trim()} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: 'white', cursor: saveFilterName.trim() ? 'pointer' : 'not-allowed', fontSize: '12px', opacity: saveFilterName.trim() ? 1 : 0.5 }}>
+                    <Check size={12} /> Salvar
+                  </button>
+                  <button onClick={() => { setShowSaveInput(false); setSaveFilterName('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowSaveInput(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px' }}>
+                  <Bookmark size={12} /> Salvar filtros atuais
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Filter panel */}
-      {showFilters && (
-        <div
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--bg-border)',
-            borderRadius: 'var(--radius-md)',
-            padding: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          {/* Filter rows */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <FilterRow label="ROAS" minKey="roas_min" maxKey="roas_max" filters={filters} onChange={setFilter} />
-            <FilterRow label="Gasto" minKey="spend_min" maxKey="spend_max" filters={filters} onChange={setFilter} placeholder="R$" />
-            <FilterRow label="Receita" minKey="revenue_min" maxKey="revenue_max" filters={filters} onChange={setFilter} placeholder="R$" />
-            <FilterRow label="CPA" minKey="cpa_min" maxKey="cpa_max" filters={filters} onChange={setFilter} placeholder="R$" />
-            <FilterRow label="CTR" minKey="ctr_min" maxKey="ctr_max" filters={filters} onChange={setFilter} placeholder="%" />
-            <FilterRow label="Hook Rate" minKey="hook_rate_min" maxKey="hook_rate_max" filters={filters} onChange={setFilter} placeholder="%" />
-          </div>
-
-          {/* Saved filter sets */}
-          <div style={{ borderTop: '1px solid var(--bg-border)', marginTop: '8px', paddingTop: '12px', padding: '12px 12px 4px' }}>
-            {savedFilterSets.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                {savedFilterSets.map((set) => (
-                  <div
-                    key={set.name}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '4px',
-                      padding: '3px 8px 3px 10px', borderRadius: '20px',
-                      border: '1px solid var(--bg-border)', background: 'var(--bg-elevated)',
-                      fontSize: '12px',
-                    }}
-                  >
-                    <button
-                      onClick={() => handleApplyFilterSet(set)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '12px', padding: 0 }}
-                    >
-                      {set.name}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteFilterSet(set.name)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '1px' }}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Save current filters */}
-            {showSaveInput ? (
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Nome do filtro..."
-                  value={saveFilterName}
-                  onChange={(e) => setSaveFilterName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveFilterSet()
-                    if (e.key === 'Escape') { setShowSaveInput(false); setSaveFilterName('') }
-                  }}
-                  style={{ ...rangeInputStyle, width: '180px', paddingLeft: '10px' }}
-                />
-                <button
-                  onClick={handleSaveFilterSet}
-                  disabled={!saveFilterName.trim()}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '4px',
-                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-                    border: 'none', background: 'var(--accent)', color: 'white',
-                    cursor: saveFilterName.trim() ? 'pointer' : 'not-allowed',
-                    fontSize: '12px', opacity: saveFilterName.trim() ? 1 : 0.5,
-                  }}
-                >
-                  <Check size={12} /> Salvar
-                </button>
-                <button
-                  onClick={() => { setShowSaveInput(false); setSaveFilterName('') }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowSaveInput(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '5px',
-                  padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--bg-border)', background: 'transparent',
-                  color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px',
-                }}
-              >
-                <Bookmark size={12} /> Salvar filtros atuais
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Warning (rate limit com fallback de cache) */}
       {adsWarning && (
