@@ -123,6 +123,7 @@ export async function POST(req: Request) {
     const processedAds = ad_names.map((n) => ({ original: n, tokens: getTokens(n) }))
 
     const matches: { ad_name: string; dropbox_url: string; dropbox_direct_url: string }[] = []
+    const matchedAds = new Set<string>()
     let nameMatchCount = 0
     let linkFailCount = 0
 
@@ -149,6 +150,7 @@ export async function POST(req: Request) {
       }
 
       if (!bestAd || bestScore === 0) continue
+      if (matchedAds.has(bestAd)) continue
       nameMatchCount++
 
       const directUrl = await getTemporaryLink(token, file.path_lower)
@@ -157,6 +159,7 @@ export async function POST(req: Request) {
         continue
       }
 
+      matchedAds.add(bestAd)
       matches.push({ ad_name: bestAd, dropbox_url: directUrl, dropbox_direct_url: directUrl })
     }
 
