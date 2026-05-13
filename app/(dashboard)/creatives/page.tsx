@@ -962,13 +962,15 @@ export default function CreativesPage() {
       const text = await res.text()
       let data: {
         matched?: number; total_files?: number; name_matches?: number; link_fails?: number
-        error?: string; debug_files?: string[]; debug_ads?: string[]
+        error?: string; upsert_error?: string; debug_files?: string[]; debug_ads?: string[]
         debug_first_file_tokens?: string[]; debug_first_ad_tokens?: string[]; debug_first_score?: number
         debug_link?: unknown
       }
       try { data = JSON.parse(text) } catch { setSyncError(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`); setSyncing(false); return }
       if (data.error) {
         setSyncError(data.error)
+      } else if (data.upsert_error) {
+        setSyncError(`Erro ao salvar no banco: ${data.upsert_error}`)
       } else {
         const matched = data.matched ?? 0
         const total = data.total_files ?? 0
@@ -1039,7 +1041,7 @@ export default function CreativesPage() {
 
   // Load Dropbox links
   const fetchLinks = useCallback(async () => {
-    const res = await fetch('/api/creatives/links')
+    const res = await fetch('/api/creatives/links', { cache: 'no-store' })
     const data = await res.json() as { links?: CreativeLink[] }
     setLinks(data.links ?? [])
   }, [])

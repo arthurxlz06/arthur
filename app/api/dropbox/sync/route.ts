@@ -160,8 +160,9 @@ export async function POST(req: Request) {
       matches.push({ ad_name: bestAd, dropbox_url: directUrl, dropbox_direct_url: directUrl })
     }
 
+    let upsertError: string | null = null
     if (matches.length > 0) {
-      await supabase.from('creative_links').upsert(
+      const { error } = await supabase.from('creative_links').upsert(
         matches.map((m) => ({
           user_id: user.id,
           ad_name: m.ad_name,
@@ -170,10 +171,12 @@ export async function POST(req: Request) {
         })),
         { onConflict: 'user_id,ad_name' }
       )
+      if (error) upsertError = error.message
     }
 
     return NextResponse.json({
-      matched: matches.length,
+      matched: upsertError ? 0 : matches.length,
+      upsert_error: upsertError,
       total_files: filesToMatch.length,
       name_matches: nameMatchCount,
       link_fails: linkFailCount,
