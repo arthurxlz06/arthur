@@ -9,7 +9,7 @@ interface DropboxEntry {
 }
 
 
-// Extrai tokens significativos: ao menos 4 chars e NÃO puramente numérico
+// Extrai tokens: palavras >= 4 chars OU números >= 2 chars (ex: 046 diferencia arquivos)
 function getTokens(name: string): string[] {
   return name
     .toLowerCase()
@@ -18,7 +18,7 @@ function getTokens(name: string): string[] {
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
-    .filter((w) => w.length >= 4 && !/^\d+$/.test(w))
+    .filter((w) => (w.length >= 4) || (/^\d+$/.test(w) && w.length >= 2))
 }
 
 // Conta quantos tokens do arquivo aparecem como substring no nome do anúncio
