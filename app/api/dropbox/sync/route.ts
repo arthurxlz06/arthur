@@ -27,13 +27,6 @@ function scoreMatch(fileTokens: string[], adName: string): number {
   return fileTokens.reduce((n, t) => n + (adLower.includes(t) ? 1 : 0), 0)
 }
 
-function convertSharedLinkToEmbed(url: string): string {
-  return url
-    .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
-    .replace('?dl=0', '?raw=1')
-    .replace('?dl=1', '?raw=1')
-    + (url.includes('?') ? '' : '?raw=1')
-}
 
 async function refreshDropboxToken(refreshToken: string): Promise<string | null> {
   const res = await fetch('https://api.dropboxapi.com/oauth2/token', {

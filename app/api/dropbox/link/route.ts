@@ -2,13 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
-function convertToEmbed(url: string): string {
-  return url
-    .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
-    .replace('?dl=0', '?raw=1')
-    .replace('?dl=1', '?raw=1')
-    + (url.includes('?') ? '' : '?raw=1')
-}
 
 async function refreshDropboxToken(refreshToken: string): Promise<string | null> {
   const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
