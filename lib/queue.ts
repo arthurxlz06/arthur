@@ -10,8 +10,10 @@ export const publishQueue = new Queue('publish-jobs', { connection: redis })
 
 export interface FrankenJobData {
   frankenstein_job_id: string
-  hook_path: string
-  body_path: string
+  hook_url: string
+  body_url: string
+  hook_ad_name: string
+  body_ad_name: string
   dropbox_access_token: string
   dropbox_refresh_token: string | null
   user_id: string

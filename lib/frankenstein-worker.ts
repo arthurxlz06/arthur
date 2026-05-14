@@ -8,36 +8,9 @@ import type { FrankenJobData } from './queue'
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 
-async function getDropboxTempLink(token: string, filePath: string): Promise<string> {
-  const res = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: filePath }),
-  })
-  const data = await res.json() as { link?: string; error_summary?: string }
-  if (!data.link) throw new Error(`Dropbox temp link falhou para ${filePath}: ${data.error_summary ?? 'sem link'}`)
-  return data.link
-}
-
-async function refreshDropboxToken(refreshToken: string): Promise<string> {
-  const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: process.env.DROPBOX_APP_KEY!,
-      client_secret: process.env.DROPBOX_APP_SECRET!,
-    }),
-  })
-  const data = await res.json() as { access_token?: string }
-  if (!data.access_token) throw new Error('Falha ao renovar token Dropbox')
-  return data.access_token
-}
-
 async function downloadFile(url: string, destPath: string): Promise<void> {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`Download falhou: ${res.status} ${url}`)
+  if (!res.ok) throw new Error(`Download falhou (${res.status}): ${url}`)
   const buffer = Buffer.from(await res.arrayBuffer())
   await fs.writeFile(destPath, buffer)
 }
@@ -62,6 +35,22 @@ async function uploadToDropbox(token: string, localPath: string, dropboxPath: st
   if (!data.path_lower) throw new Error(`Upload Dropbox falhou: ${data.error_summary ?? 'sem path'}`)
 }
 
+async function refreshDropboxToken(refreshToken: string): Promise<string> {
+  const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: process.env.DROPBOX_APP_KEY!,
+      client_secret: process.env.DROPBOX_APP_SECRET!,
+    }),
+  })
+  const data = await res.json() as { access_token?: string }
+  if (!data.access_token) throw new Error('Falha ao renovar token Dropbox')
+  return data.access_token
+}
+
 function runFfmpeg(hookPath: string, bodyPath: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     ffmpeg()
@@ -83,41 +72,35 @@ function runFfmpeg(hookPath: string, bodyPath: string, outputPath: string): Prom
 }
 
 export async function processFrankenJob(job: Job<FrankenJobData>): Promise<void> {
-  const { frankenstein_job_id, hook_path, body_path, dropbox_access_token, dropbox_refresh_token, user_id } = job.data
+  const { frankenstein_job_id, hook_url, body_url, user_id, dropbox_access_token, dropbox_refresh_token } = job.data
   const supabase = getSupabaseAdmin()
-  const tmpDir = '/tmp'
   const id = frankenstein_job_id
+  const tmpDir = '/tmp'
   const hookTmp = path.join(tmpDir, `hook-${id}.mp4`)
   const bodyTmp = path.join(tmpDir, `body-${id}.mp4`)
-  const outTmp = path.join(tmpDir, `out-${id}.mp4`)
+  const outTmp  = path.join(tmpDir, `out-${id}.mp4`)
 
   await supabase.from('frankenstein_jobs').update({ status: 'processing' }).eq('id', id)
 
   try {
-    let token = dropbox_access_token
-
-    // Get temp links (with refresh on failure)
-    let hookLink: string
-    let bodyLink: string
-    try {
-      hookLink = await getDropboxTempLink(token, hook_path)
-      bodyLink = await getDropboxTempLink(token, body_path)
-    } catch {
-      if (!dropbox_refresh_token) throw new Error('Token Dropbox expirado e sem refresh token')
-      token = await refreshDropboxToken(dropbox_refresh_token)
-      await supabase.from('users').update({ dropbox_access_token: token }).eq('id', user_id)
-      hookLink = await getDropboxTempLink(token, hook_path)
-      bodyLink = await getDropboxTempLink(token, body_path)
-    }
-
-    await downloadFile(hookLink, hookTmp)
-    await downloadFile(bodyLink, bodyTmp)
+    // Download directly via share URL — no Dropbox token needed
+    await downloadFile(hook_url, hookTmp)
+    await downloadFile(body_url, bodyTmp)
 
     await runFfmpeg(hookTmp, bodyTmp, outTmp)
 
-    const timestamp = Date.now()
-    const outputDropboxPath = `/frankenstein/${timestamp}.mp4`
-    await uploadToDropbox(token, outTmp, outputDropboxPath)
+    // Upload result to Dropbox (token needed only here)
+    let token = dropbox_access_token
+    const outputDropboxPath = `/frankenstein/${Date.now()}.mp4`
+
+    try {
+      await uploadToDropbox(token, outTmp, outputDropboxPath)
+    } catch {
+      if (!dropbox_refresh_token) throw new Error('Token Dropbox expirado e sem refresh token para upload')
+      token = await refreshDropboxToken(dropbox_refresh_token)
+      await supabase.from('users').update({ dropbox_access_token: token }).eq('id', user_id)
+      await uploadToDropbox(token, outTmp, outputDropboxPath)
+    }
 
     await supabase.from('frankenstein_jobs').update({
       status: 'done',

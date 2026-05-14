@@ -17,16 +17,20 @@ export async function POST(req: Request) {
   if (!user?.dropbox_access_token)
     return NextResponse.json({ error: 'Dropbox não conectado. Conecte em Configurações.' }, { status: 400 })
 
-  const { hook_path, body_path } = await req.json() as { hook_path: string; body_path: string }
-  if (!hook_path || !body_path)
-    return NextResponse.json({ error: 'hook_path e body_path são obrigatórios' }, { status: 400 })
+  const { hook_url, hook_ad_name, body_url, body_ad_name } =
+    await req.json() as { hook_url: string; hook_ad_name: string; body_url: string; body_ad_name: string }
+
+  if (!hook_url || !body_url || !hook_ad_name || !body_ad_name)
+    return NextResponse.json({ error: 'hook_url, hook_ad_name, body_url e body_ad_name são obrigatórios' }, { status: 400 })
 
   const { data: job, error } = await supabase
     .from('frankenstein_jobs')
     .insert({
       user_id: user.id,
-      hook_path,
-      body_path,
+      hook_path: hook_url,
+      body_path: body_url,
+      hook_ad_name,
+      body_ad_name,
     })
     .select('id')
     .single()
@@ -35,8 +39,10 @@ export async function POST(req: Request) {
 
   await enqueueFrankenJob({
     frankenstein_job_id: job.id as string,
-    hook_path,
-    body_path,
+    hook_url,
+    body_url,
+    hook_ad_name,
+    body_ad_name,
     dropbox_access_token: user.dropbox_access_token as string,
     dropbox_refresh_token: (user.dropbox_refresh_token as string | null) ?? null,
     user_id: user.id as string,
