@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, Fragment } from 'react'
 import {
   PlaySquare,
   ChevronDown,
@@ -945,7 +945,7 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
   }
 
   const nameWidth = getW('name', 240)
-  const gridTemplate = `64px ${nameWidth}px ${visibleCols.map((c) => `${getW(c.key, c.defaultWidth)}px`).join(' ')}`
+  const totalCols = 2 + visibleCols.length
 
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -979,91 +979,91 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
         )}
       </div>
 
-      {/* Scrollable table */}
-      <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
-        <div style={{ minWidth: `${64 + nameWidth + visibleCols.reduce((s, c) => s + getW(c.key, c.defaultWidth), 0)}px` }}>
-          {/* Header */}
-          <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, background: 'var(--bg-elevated)', borderBottom: '2px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 10 }}>
-            <div style={{ padding: '9px 8px', position: 'sticky', left: 0, zIndex: 4, background: 'var(--bg-elevated)' }} />
-            <div style={{ position: 'sticky', left: '64px', zIndex: 4, background: 'var(--bg-elevated)', borderRight: '2px solid var(--bg-border)', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', userSelect: 'none' }}>
-              CRIATIVO
-              <div title="Arrastar para redimensionar" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }} onMouseDown={(e) => startResize('name', nameWidth, e)} />
-            </div>
-            {visibleCols.map((col) => (
-              <div key={col.key} style={{ position: 'relative', padding: '9px 10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.05em', textAlign: 'right', borderLeft: '1px solid var(--bg-border)', userSelect: 'none' }}>
-                {col.label}
-                <div
-                  title="Arrastar para redimensionar"
-                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }}
-                  onMouseDown={(e) => startResize(col.key, getW(col.key, col.defaultWidth), e)}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Rows */}
-          {creatives.map((c) => {
-            const isExpanded = expandedRow === c.ad_id
-            return (
-              <div key={c.ad_id} style={{ borderBottom: '1px solid var(--bg-border)' }}>
-                <div
-                  style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', cursor: 'pointer', transition: 'background 80ms', background: hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'transparent' }}
-                  onClick={() => setExpandedRow(isExpanded ? null : c.ad_id)}
-                  onMouseEnter={() => setHoveredRow(c.ad_id)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                >
-                  <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'sticky', left: 0, zIndex: 2, background: hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'var(--bg-surface)' }}>
-                    {c.link ? (
-                      <div style={{ position: 'relative', width: '36px', height: '48px', borderRadius: '4px', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
-                        <video src={c.link.dropbox_direct_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} preload="metadata" muted />
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
-                          <Play size={11} color="white" fill="white" />
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ width: '36px', height: '48px', borderRadius: '4px', border: '1px dashed var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); onLink(c.ad_name) }}>
-                        <Link2 size={12} color="var(--text-muted)" />
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ padding: '8px 10px 8px 4px', position: 'sticky', left: '64px', zIndex: 2, background: hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'var(--bg-surface)', borderRight: '2px solid var(--bg-border)' }}>
-                    <p style={{ fontSize: '12px', color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: '1.4' }}>{c.ad_name}</p>
-                  </div>
-                  {visibleCols.map((col) => (
-                    <div key={col.key} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', textAlign: 'right', borderLeft: '1px solid var(--bg-border)' }}>
-                      {col.fmt(c[col.key as keyof AdMetrics] as number)}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Expanded panel */}
-                {isExpanded && (
-                  <div style={{ padding: '16px', borderTop: '1px solid var(--bg-border)', display: 'flex', gap: '20px', alignItems: 'flex-start', background: 'var(--bg-elevated)' }}>
-                    {c.link ? (
-                      <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '108px', borderRadius: '8px', aspectRatio: '9/16', background: '#000', flexShrink: 0 }} />
-                    ) : (
-                      <div style={{ width: '108px', aspectRatio: '9/16', borderRadius: '8px', border: '1px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => onLink(c.ad_name)}>
-                        <Link2 size={18} color="var(--text-muted)" />
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', padding: '0 8px' }}>Vincular vídeo</span>
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '2px' }}>
-                        {ALL_TABLE_COLS.map((col) => (
-                          <div key={col.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 6px', borderRadius: '4px', background: visibleKeys.includes(col.key) ? 'rgba(91,110,245,0.05)' : 'transparent' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{col.label}</span>
-                            <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>{col.fmt(c[col.key as keyof AdMetrics] as number)}</span>
+      {/* Table — overflow only on this wrapper, not the page */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: `${64 + nameWidth + visibleCols.reduce((s, c) => s + getW(c.key, c.defaultWidth), 0)}px` }}>
+          <thead>
+            <tr>
+              <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 5, background: 'var(--bg-elevated)', width: '64px', padding: '9px 8px', borderBottom: '2px solid var(--bg-border)', fontWeight: 'normal' }} />
+              <th style={{ position: 'sticky', top: 0, left: '64px', zIndex: 5, background: 'var(--bg-elevated)', width: `${nameWidth}px`, padding: '9px 10px', borderRight: '2px solid var(--bg-border)', borderBottom: '2px solid var(--bg-border)', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', userSelect: 'none' }}>
+                CRIATIVO
+                <div title="Arrastar para redimensionar" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }} onMouseDown={(e) => startResize('name', nameWidth, e)} />
+              </th>
+              {visibleCols.map((col) => (
+                <th key={col.key} style={{ position: 'sticky', top: 0, zIndex: 3, background: 'var(--bg-elevated)', width: `${getW(col.key, col.defaultWidth)}px`, padding: '9px 10px', borderLeft: '1px solid var(--bg-border)', borderBottom: '2px solid var(--bg-border)', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', userSelect: 'none' }}>
+                  {col.label}
+                  <div title="Arrastar para redimensionar" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent' }} onMouseDown={(e) => startResize(col.key, getW(col.key, col.defaultWidth), e)} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {creatives.map((c) => {
+              const isExpanded = expandedRow === c.ad_id
+              const rowBg = hoveredRow === c.ad_id ? 'var(--bg-elevated)' : 'var(--bg-surface)'
+              return (
+                <Fragment key={c.ad_id}>
+                  <tr
+                    style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--bg-border)', cursor: 'pointer' }}
+                    onClick={() => setExpandedRow(isExpanded ? null : c.ad_id)}
+                    onMouseEnter={() => setHoveredRow(c.ad_id)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                  >
+                    <td style={{ position: 'sticky', left: 0, zIndex: 2, background: rowBg, padding: '8px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      {c.link ? (
+                        <div style={{ position: 'relative', width: '36px', height: '48px', borderRadius: '4px', overflow: 'hidden', background: '#000', margin: '0 auto' }}>
+                          <video src={c.link.dropbox_direct_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} preload="metadata" muted />
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
+                            <Play size={11} color="white" fill="white" />
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                        </div>
+                      ) : (
+                        <div style={{ width: '36px', height: '48px', borderRadius: '4px', border: '1px dashed var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }} onClick={(e) => { e.stopPropagation(); onLink(c.ad_name) }}>
+                          <Link2 size={12} color="var(--text-muted)" />
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ position: 'sticky', left: '64px', zIndex: 2, background: rowBg, padding: '8px 10px 8px 4px', borderRight: '2px solid var(--bg-border)', verticalAlign: 'middle' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: '1.4', margin: 0 }}>{c.ad_name}</p>
+                    </td>
+                    {visibleCols.map((col) => (
+                      <td key={col.key} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right', borderLeft: '1px solid var(--bg-border)', verticalAlign: 'middle' }}>
+                        {col.fmt(c[col.key as keyof AdMetrics] as number)}
+                      </td>
+                    ))}
+                  </tr>
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={totalCols} style={{ padding: 0, borderBottom: '1px solid var(--bg-border)' }}>
+                        <div style={{ padding: '16px', display: 'flex', gap: '20px', alignItems: 'flex-start', background: 'var(--bg-elevated)' }}>
+                          {c.link ? (
+                            <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '108px', borderRadius: '8px', aspectRatio: '9/16', background: '#000', flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: '108px', aspectRatio: '9/16', borderRadius: '8px', border: '1px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => onLink(c.ad_name)}>
+                              <Link2 size={18} color="var(--text-muted)" />
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', padding: '0 8px' }}>Vincular vídeo</span>
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.ad_name}>{c.ad_name}</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '2px' }}>
+                              {ALL_TABLE_COLS.map((col) => (
+                                <div key={col.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 6px', borderRadius: '4px', background: visibleKeys.includes(col.key) ? 'rgba(91,110,245,0.05)' : 'transparent' }}>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{col.label}</span>
+                                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{col.fmt(c[col.key as keyof AdMetrics] as number)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
