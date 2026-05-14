@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   PlaySquare,
+  Scissors,
 } from 'lucide-react'
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/publish', icon: Radio, label: 'Publicar' },
   { href: '/history', icon: History, label: 'Histórico' },
   { href: '/creatives', icon: PlaySquare, label: 'Criativos' },
+  { href: '/frankenstein', icon: Scissors, label: 'Frankenstein' },
   { href: '/settings', icon: SlidersHorizontal, label: 'Configurações' },
 ]
 
