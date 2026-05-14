@@ -122,7 +122,6 @@ function Panel({
   creatives,
   selected,
   onSelect,
-  metricKey,
   metricLabel,
   formatMetric,
 }: {
