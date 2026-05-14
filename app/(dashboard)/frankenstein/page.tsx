@@ -194,6 +194,7 @@ export default function FrankensteinPage() {
   const [loading, setLoading] = useState(true)
   const [hook, setHook] = useState<RankedCreative | null>(null)
   const [body, setBody] = useState<RankedCreative | null>(null)
+  const [cutSeconds, setCutSeconds] = useState(3)
   const [generating, setGenerating] = useState(false)
   const [job, setJob] = useState<JobStatus | null>(null)
   const [genError, setGenError] = useState('')
@@ -231,27 +232,33 @@ export default function FrankensteinPage() {
     setJob(null)
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
 
-    const res = await fetch('/api/frankenstein', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        hook_url: hook.dropbox_direct_url,
-        hook_ad_name: hook.ad_name,
-        body_url: body.dropbox_direct_url,
-        body_ad_name: body.ad_name,
-      }),
-    })
-    const data = await res.json() as { id?: string; error?: string }
+    try {
+      const res = await fetch('/api/frankenstein', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hook_url: hook.dropbox_direct_url,
+          hook_ad_name: hook.ad_name,
+          body_url: body.dropbox_direct_url,
+          body_ad_name: body.ad_name,
+          cut_seconds: cutSeconds,
+        }),
+      })
+      const data = await res.json() as { id?: string; error?: string }
 
-    if (data.error || !data.id) {
-      setGenError(data.error ?? 'Erro desconhecido')
+      if (data.error || !data.id) {
+        setGenError(data.error ?? 'Erro desconhecido')
+        setGenerating(false)
+        return
+      }
+
+      setJob({ id: data.id, status: 'queued', output_path: null, error_msg: null, hook_ad_name: hook.ad_name, body_ad_name: body.ad_name })
       setGenerating(false)
-      return
+      startPolling(data.id)
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : 'Erro de conexão')
+      setGenerating(false)
     }
-
-    setJob({ id: data.id, status: 'queued', output_path: null, error_msg: null, hook_ad_name: hook.ad_name, body_ad_name: body.ad_name })
-    setGenerating(false)
-    startPolling(data.id)
   }
 
   const canGenerate = !!hook && !!body && !generating && (!job || job.status === 'failed')
@@ -329,6 +336,34 @@ export default function FrankensteinPage() {
               <span>Combinação: <strong style={{ color: 'var(--text-primary)' }}>{hook.ad_name}</strong> (Hook {fmt(hook.hook_rate)}%) + <strong style={{ color: 'var(--text-primary)' }}>{body.ad_name}</strong> (Body {fmt(body.body_rate)}%)</span>
             </div>
           )}
+
+          {/* Cut point slider */}
+          <div style={{ marginBottom: '20px', padding: '16px 20px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Ponto de corte</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                  Hook: 0–{cutSeconds}s · Body: {cutSeconds}s em diante
+                </span>
+              </div>
+              <span style={{ fontSize: '20px', fontWeight: '700', color: 'var(--accent)', minWidth: '44px', textAlign: 'right' }}>
+                {cutSeconds}s
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={15}
+              step={1}
+              value={cutSeconds}
+              onChange={(e) => setCutSeconds(Number(e.target.value))}
+              style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>1s</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>15s</span>
+            </div>
+          </div>
 
           {genError && (
             <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: 'var(--status-error)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
