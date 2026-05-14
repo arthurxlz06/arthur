@@ -3,6 +3,10 @@ import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { enqueueFrankenJob } from '@/lib/queue'
 
+function clampCut(v: unknown, fallback: number): number {
+  return typeof v === 'number' && v >= 0.5 && v <= 120 ? v : fallback
+}
+
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
@@ -17,13 +21,22 @@ export async function POST(req: Request) {
   if (!user?.dropbox_access_token)
     return NextResponse.json({ error: 'Dropbox não conectado. Conecte em Configurações.' }, { status: 400 })
 
-  const { hook_url, hook_ad_name, body_url, body_ad_name, cut_seconds } =
-    await req.json() as { hook_url: string; hook_ad_name: string; body_url: string; body_ad_name: string; cut_seconds?: number }
+  const body = await req.json() as {
+    hook_url: string
+    hook_ad_name: string
+    body_url: string
+    body_ad_name: string
+    hook_end?: number
+    body_start?: number
+  }
+
+  const { hook_url, hook_ad_name, body_url, body_ad_name } = body
 
   if (!hook_url || !body_url || !hook_ad_name || !body_ad_name)
     return NextResponse.json({ error: 'hook_url, hook_ad_name, body_url e body_ad_name são obrigatórios' }, { status: 400 })
 
-  const cutSecs = typeof cut_seconds === 'number' && cut_seconds >= 1 && cut_seconds <= 60 ? cut_seconds : 3
+  const hookEnd = clampCut(body.hook_end, 3)
+  const bodyStart = clampCut(body.body_start, 3)
 
   const { data: job, error } = await supabase
     .from('frankenstein_jobs')
@@ -45,7 +58,8 @@ export async function POST(req: Request) {
     body_url,
     hook_ad_name,
     body_ad_name,
-    cut_seconds: cutSecs,
+    hook_end: hookEnd,
+    body_start: bodyStart,
     dropbox_access_token: user.dropbox_access_token as string,
     dropbox_refresh_token: (user.dropbox_refresh_token as string | null) ?? null,
     user_id: user.id as string,

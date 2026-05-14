@@ -14,7 +14,8 @@ export interface FrankenJobData {
   body_url: string
   hook_ad_name: string
   body_ad_name: string
-  cut_seconds: number
+  hook_end: number
+  body_start: number
   dropbox_access_token: string
   dropbox_refresh_token: string | null
   user_id: string

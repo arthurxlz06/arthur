@@ -51,17 +51,22 @@ async function refreshDropboxToken(refreshToken: string): Promise<string> {
   return data.access_token
 }
 
-function runFfmpeg(hookPath: string, bodyPath: string, outputPath: string, cutSeconds: number): Promise<void> {
-  const c = cutSeconds
+function runFfmpeg(
+  hookPath: string,
+  bodyPath: string,
+  outputPath: string,
+  hookEnd: number,
+  bodyStart: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(hookPath)
       .input(bodyPath)
       .complexFilter([
-        `[0:v]trim=end=${c},setpts=PTS-STARTPTS[v0]`,
-        `[1:v]trim=start=${c},setpts=PTS-STARTPTS[v1]`,
-        `[0:a]atrim=end=${c},asetpts=PTS-STARTPTS[a0]`,
-        `[1:a]atrim=start=${c},asetpts=PTS-STARTPTS[a1]`,
+        `[0:v]trim=end=${hookEnd},setpts=PTS-STARTPTS[v0]`,
+        `[1:v]trim=start=${bodyStart},setpts=PTS-STARTPTS[v1]`,
+        `[0:a]atrim=end=${hookEnd},asetpts=PTS-STARTPTS[a0]`,
+        `[1:a]atrim=start=${bodyStart},asetpts=PTS-STARTPTS[a1]`,
         '[v0][a0][v1][a1]concat=n=2:v=1:a=1[vout][aout]',
       ])
       .outputOptions(['-map [vout]', '-map [aout]', '-c:v libx264', '-c:a aac', '-movflags +faststart'])
@@ -73,7 +78,7 @@ function runFfmpeg(hookPath: string, bodyPath: string, outputPath: string, cutSe
 }
 
 export async function processFrankenJob(job: Job<FrankenJobData>): Promise<void> {
-  const { frankenstein_job_id, hook_url, body_url, user_id, dropbox_access_token, dropbox_refresh_token, cut_seconds } = job.data
+  const { frankenstein_job_id, hook_url, body_url, user_id, dropbox_access_token, dropbox_refresh_token, hook_end, body_start } = job.data
   const supabase = getSupabaseAdmin()
   const id = frankenstein_job_id
   const tmpDir = '/tmp'
@@ -88,7 +93,7 @@ export async function processFrankenJob(job: Job<FrankenJobData>): Promise<void>
     await downloadFile(hook_url, hookTmp)
     await downloadFile(body_url, bodyTmp)
 
-    await runFfmpeg(hookTmp, bodyTmp, outTmp, cut_seconds ?? 3)
+    await runFfmpeg(hookTmp, bodyTmp, outTmp, hook_end ?? 3, body_start ?? 3)
 
     // Upload result to Dropbox (token needed only here)
     let token = dropbox_access_token
