@@ -182,9 +182,11 @@ function MetricRow({ label, value }: { label: string; value: string }) {
 function CreativeCard({
   creative,
   onLink,
+  onUnlink,
 }: {
   creative: Creative
   onLink: (adName: string) => void
+  onUnlink: (linkId: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -279,29 +281,20 @@ function CreativeCard({
           </div>
         )}
 
-        {/* Link button if no video */}
-        {!creative.link && (
+        {/* Link / unlink buttons */}
+        {!creative.link ? (
           <button
             onClick={() => onLink(creative.ad_name)}
-            style={{
-              marginTop: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '5px',
-              width: '100%',
-              padding: '7px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--accent)',
-              background: 'rgba(91,110,245,0.08)',
-              color: 'var(--accent)',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: '500',
-            }}
+            style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', width: '100%', padding: '7px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent)', background: 'rgba(91,110,245,0.08)', color: 'var(--accent)', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}
           >
-            <Link2 size={12} />
-            Vincular vídeo
+            <Link2 size={12} /> Vincular vídeo
+          </button>
+        ) : (
+          <button
+            onClick={() => onUnlink(creative.link!.id)}
+            style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', width: '100%', padding: '7px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px' }}
+          >
+            <X size={12} /> Desvincular vídeo
           </button>
         )}
       </div>
@@ -883,7 +876,7 @@ const ALL_TABLE_COLS = [
   { key: 'video_30s',   label: '30s VV',      defaultWidth: 68,  defaultVisible: false, fmt: (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v)) },
 ] as const
 
-function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adName: string) => void }) {
+function TableView({ creatives, onLink, onUnlink }: { creatives: Creative[]; onLink: (adName: string) => void; onUnlink: (linkId: string) => void }) {
   const [visibleKeys, setVisibleKeys] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('table_visible_cols') ?? 'null') ?? ALL_TABLE_COLS.filter((c) => c.defaultVisible).map((c) => c.key) }
     catch { return ALL_TABLE_COLS.filter((c) => c.defaultVisible).map((c) => c.key) }
@@ -1037,7 +1030,12 @@ function TableView({ creatives, onLink }: { creatives: Creative[]; onLink: (adNa
                       <td colSpan={totalCols} style={{ padding: 0, borderBottom: '1px solid var(--bg-border)' }}>
                         <div style={{ padding: '16px', display: 'flex', gap: '20px', alignItems: 'flex-start', background: 'var(--bg-elevated)' }}>
                           {c.link ? (
-                            <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '108px', borderRadius: '8px', aspectRatio: '9/16', background: '#000', flexShrink: 0 }} />
+                            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <video src={c.link.dropbox_direct_url} controls autoPlay muted style={{ width: '108px', borderRadius: '8px', aspectRatio: '9/16', background: '#000', display: 'block' }} />
+                              <button onClick={(e) => { e.stopPropagation(); onUnlink(c.link!.id) }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%', padding: '5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px' }}>
+                                <X size={11} /> Desvincular
+                              </button>
+                            </div>
                           ) : (
                             <div style={{ width: '108px', aspectRatio: '9/16', borderRadius: '8px', border: '1px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => onLink(c.ad_name)}>
                               <Link2 size={18} color="var(--text-muted)" />
@@ -1462,6 +1460,15 @@ export default function CreativesPage() {
     await fetchLinks()
   }
 
+  const handleUnlink = async (linkId: string) => {
+    await fetch('/api/creatives/links', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: linkId }),
+    })
+    await fetchLinks()
+  }
+
   const openPicker = async (adName: string) => {
     setPickingFor(adName)
     setFileSearch('')
@@ -1855,14 +1862,14 @@ export default function CreativesPage() {
       {!loadingAds && sorted.length > 0 && viewMode === 'grid' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
           {sorted.map((c) => (
-            <CreativeCard key={c.ad_id} creative={c} onLink={(adName) => openPicker(adName)} />
+            <CreativeCard key={c.ad_id} creative={c} onLink={(adName) => openPicker(adName)} onUnlink={handleUnlink} />
           ))}
         </div>
       )}
 
       {/* Table view */}
       {!loadingAds && sorted.length > 0 && viewMode === 'table' && (
-        <TableView creatives={sorted} onLink={openPicker} />
+        <TableView creatives={sorted} onLink={openPicker} onUnlink={handleUnlink} />
       )}
 
       {/* No results after filter */}
