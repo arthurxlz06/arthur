@@ -19,31 +19,18 @@ import {
   Archive,
 } from 'lucide-react'
 
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', archived: true },
-  { href: '/accounts', icon: Settings, label: 'Contas', archived: true },
-  { href: '/library', icon: FolderOpen, label: 'Biblioteca', archived: true },
-  { href: '/publish', icon: Radio, label: 'Publicar', archived: true },
-  { href: '/history', icon: History, label: 'Histórico', archived: true },
-  { href: '/creatives', icon: PlaySquare, label: 'Criativos', archived: false },
-  { href: '/settings', icon: SlidersHorizontal, label: 'Configurações', archived: false },
+const activeItems = [
+  { href: '/creatives', icon: PlaySquare, label: 'Criativos' },
+  { href: '/settings', icon: SlidersHorizontal, label: 'Configurações' },
 ]
 
-const archivedRoutes = navItems.filter((n) => n.archived).map((n) => n.href)
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '16px', textAlign: 'center' }}>
-      <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'var(--bg-elevated)', border: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Archive size={22} color="var(--text-muted)" />
-      </div>
-      <div>
-        <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 6px' }}>{label}</p>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Esta seção está arquivada e será disponibilizada em breve.</p>
-      </div>
-    </div>
-  )
-}
+const archivedItems = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/accounts', icon: Settings, label: 'Contas' },
+  { href: '/library', icon: FolderOpen, label: 'Biblioteca' },
+  { href: '/publish', icon: Radio, label: 'Publicar' },
+  { href: '/history', icon: History, label: 'Histórico' },
+]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
@@ -51,6 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(archivedItems.some((n) => n.href === pathname))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024)
@@ -220,39 +208,68 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '16px 12px' }}>
-          {navItems.map(({ href, icon: Icon, label, archived }) => {
+        <nav style={{ flex: 1, padding: '16px 12px', overflowY: 'auto' }}>
+          {/* Active pages */}
+          {activeItems.map(({ href, icon: Icon, label }) => {
             const active = pathname === href
             return (
               <Link
                 key={href}
                 href={href}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '9px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  marginBottom: '2px',
-                  color: active ? 'var(--text-primary)' : archived ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '9px 10px', borderRadius: 'var(--radius-sm)', marginBottom: '2px',
+                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
                   background: active ? 'var(--bg-elevated)' : 'transparent',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: active ? '500' : '400',
-                  transition: 'all 200ms ease',
-                  opacity: archived ? 0.55 : 1,
+                  textDecoration: 'none', fontSize: '14px',
+                  fontWeight: active ? '500' : '400', transition: 'all 200ms ease',
                 }}
               >
                 <Icon size={16} />
-                <span style={{ flex: 1 }}>{label}</span>
-                {archived && (
-                  <span style={{ fontSize: '9px', fontWeight: '600', color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px solid var(--bg-border)', padding: '1px 5px', borderRadius: '4px', letterSpacing: '0.04em' }}>
-                    EM BREVE
-                  </span>
-                )}
+                {label}
               </Link>
             )
           })}
+
+          {/* Archived group */}
+          <div style={{ marginTop: '12px' }}>
+            <button
+              onClick={() => setArchiveOpen((v) => !v)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: '11px', fontWeight: '600',
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+                marginBottom: '2px', transition: 'color 150ms',
+              }}
+            >
+              <Archive size={12} />
+              <span style={{ flex: 1, textAlign: 'left' }}>Arquivado</span>
+              <span style={{ fontSize: '10px', transition: 'transform 200ms', display: 'inline-block', transform: archiveOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+            </button>
+
+            {archiveOpen && archivedItems.map(({ href, icon: Icon, label }) => {
+              const active = pathname === href
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '8px 10px 8px 28px', borderRadius: 'var(--radius-sm)', marginBottom: '2px',
+                    color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+                    background: active ? 'var(--bg-elevated)' : 'transparent',
+                    textDecoration: 'none', fontSize: '13px',
+                    fontWeight: active ? '500' : '400', transition: 'all 200ms ease',
+                  }}
+                >
+                  <Icon size={14} />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
         </nav>
 
         {/* User + Logout */}
@@ -330,9 +347,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           minHeight: '100vh',
         }}
       >
-        {archivedRoutes.includes(pathname ?? '')
-          ? <ComingSoon label={navItems.find((n) => n.href === pathname)?.label ?? ''} />
-          : children}
+        {children}
       </main>
     </div>
   )
