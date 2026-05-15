@@ -1,8 +1,7 @@
 import { Worker, Job } from 'bullmq'
 import { redis } from './queue'
-import type { PublishJobData, FrankenJobData } from './queue'
+import type { PublishJobData } from './queue'
 import { getSupabaseAdmin } from './supabase'
-import { processFrankenJob } from './frankenstein-worker'
 
 async function downloadMedia(
   storagePath: string | null,
@@ -139,11 +138,8 @@ async function processPublishJob(job: Job<PublishJobData>) {
   }
 }
 
-export const publishWorker = new Worker<PublishJobData | FrankenJobData>('publish-jobs', async (job) => {
-  if (job.name.startsWith('frankenstein-')) {
-    return processFrankenJob(job as Job<FrankenJobData>)
-  }
-  return processPublishJob(job as Job<PublishJobData>)
+export const publishWorker = new Worker<PublishJobData>('publish-jobs', async (job) => {
+  return processPublishJob(job)
 }, {
   connection: redis,
   concurrency: 2,

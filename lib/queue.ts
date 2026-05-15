@@ -8,26 +8,6 @@ export const redis = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:637
 
 export const publishQueue = new Queue('publish-jobs', { connection: redis })
 
-export interface FrankenJobData {
-  frankenstein_job_id: string
-  hook_url: string
-  body_url: string
-  hook_ad_name: string
-  body_ad_name: string
-  hook_end: number
-  body_start: number
-  dropbox_access_token: string
-  dropbox_refresh_token: string | null
-  user_id: string
-}
-
-export async function enqueueFrankenJob(data: FrankenJobData) {
-  await publishQueue.add(`frankenstein-${data.frankenstein_job_id}`, data, {
-    attempts: 2,
-    backoff: { type: 'exponential' as const, delay: 3000 },
-  })
-}
-
 export interface PublishJobData {
   publish_job_id: string
   video_storage_path: string | null
