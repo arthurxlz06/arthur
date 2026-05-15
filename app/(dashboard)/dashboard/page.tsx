@@ -142,7 +142,7 @@ export default function DashboardPage() {
           }}
         >
           <Zap size={12} color="var(--accent)" />
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>AdUploader</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>68Prêmios</span>
         </div>
       </div>
 

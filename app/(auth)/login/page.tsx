@@ -42,7 +42,7 @@ export default function LoginPage() {
                 <path d="M6 8L7.5 9.5L10.5 6.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <span style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>AdUploader</span>
+            <span style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>68Prêmios</span>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Plataforma de publicação de anúncios</p>
         </div>

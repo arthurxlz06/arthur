@@ -126,7 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 letterSpacing: '-0.03em',
               }}
             >
-              AdUploader
+              68Prêmios
             </span>
           </div>
           <button
@@ -202,7 +202,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 letterSpacing: '-0.03em',
               }}
             >
-              AdUploader
+              68Prêmios
             </span>
           </div>
         </div>
