@@ -1017,7 +1017,7 @@ function TableView({ creatives, onLink, onUnlink }: { creatives: Creative[]; onL
                       )}
                     </td>
                     <td style={{ position: 'sticky', left: '64px', zIndex: 2, background: rowBg, padding: '8px 10px 8px 4px', borderRight: '2px solid var(--bg-border)', verticalAlign: 'middle' }}>
-                      <p style={{ fontSize: '12px', color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: '1.4', margin: 0 }}>{c.ad_name}</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }} title={c.ad_name}>{c.ad_name}</p>
                     </td>
                     {visibleCols.map((col) => (
                       <td key={col.key} style={{ padding: '8px 10px', fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right', borderLeft: '1px solid var(--bg-border)', verticalAlign: 'middle' }}>
