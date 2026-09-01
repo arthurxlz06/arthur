@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { signIn } from 'next-auth/react'
 import { Check, AlertCircle, Loader } from 'lucide-react'
 
 type Status = 'loading' | 'connected' | 'disconnected'
@@ -142,7 +141,7 @@ export default function SettingsPage() {
     }
   }, [])
 
-  const handleMetaConnect = () => signIn('facebook', { callbackUrl: '/settings' })
+  const handleMetaConnect = () => { window.location.href = '/api/meta/oauth' }
 
   const handleMetaDisconnect = async () => {
     setMetaDisconnecting(true)

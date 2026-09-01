@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getBusinessManagers, getAdAccountsByBM, getClientAdAccounts } from '@/lib/facebook'
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-  }
+  const userEmail = process.env.AUTH_EMAIL!
 
   const { data: user, error } = await getSupabaseAdmin()
     .from('users')
     .select('id, facebook_access_token')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
 
   if (error || !user?.facebook_access_token) {
@@ -42,17 +38,14 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-  }
+  const userEmail = process.env.AUTH_EMAIL!
 
   const { bm_id, bm_name } = await req.json()
 
   const { data: user } = await getSupabaseAdmin()
     .from('users')
     .select('id, facebook_access_token')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
 
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
@@ -131,17 +124,14 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-  }
+  const userEmail = process.env.AUTH_EMAIL!
 
   const { bm_id } = await req.json()
 
   const { data: user } = await getSupabaseAdmin()
     .from('users')
     .select('id')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
 
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })

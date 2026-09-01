@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 function convertDropboxToEmbed(url: string): string {
@@ -14,12 +13,11 @@ function convertDropboxToEmbed(url: string): string {
 }
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
-    .from('users').select('id').eq('email', session.user.email).single()
+    .from('users').select('id').eq('email', userEmail).single()
 
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
@@ -32,12 +30,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
-    .from('users').select('id').eq('email', session.user.email).single()
+    .from('users').select('id').eq('email', userEmail).single()
 
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
@@ -79,12 +76,11 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
-    .from('users').select('id').eq('email', session.user.email).single()
+    .from('users').select('id').eq('email', userEmail).single()
 
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 

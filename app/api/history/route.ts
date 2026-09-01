@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { publishJob } from '@/lib/publish'
 
@@ -10,16 +9,14 @@ type RetryJobRow = {
 }
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email)
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
 
   const { data: user } = await supabase
     .from('users')
     .select('id')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
@@ -64,16 +61,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email)
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
 
   const { data: user } = await supabase
     .from('users')
     .select('id, facebook_access_token')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
   if (!user?.facebook_access_token)
     return NextResponse.json({ error: 'Token não encontrado' }, { status: 400 })

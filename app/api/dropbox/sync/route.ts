@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 interface DropboxEntry {
@@ -76,15 +75,13 @@ async function getTemporaryLink(token: string, path: string): Promise<string | n
 
 export async function POST(req: Request) {
   try {
-    const session = await auth()
-    if (!session?.user?.email)
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const userEmail = process.env.AUTH_EMAIL!
 
     const supabase = getSupabaseAdmin()
     const { data: user } = await supabase
       .from('users')
       .select('id, dropbox_access_token, dropbox_refresh_token')
-      .eq('email', session.user.email)
+      .eq('email', userEmail)
       .single()
 
     if (!user?.dropbox_access_token) {
@@ -193,15 +190,13 @@ export async function POST(req: Request) {
 
 // Listar pastas disponíveis no Dropbox
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email)
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
     .from('users')
     .select('id, dropbox_access_token, dropbox_refresh_token')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
 
   if (!user?.dropbox_access_token)

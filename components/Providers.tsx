@@ -1,12 +1,7 @@
 'use client'
 
-import { SessionProvider } from 'next-auth/react'
 import { ToastProvider } from '@/contexts/toast'
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <SessionProvider>
-      <ToastProvider>{children}</ToastProvider>
-    </SessionProvider>
-  )
+  return <ToastProvider>{children}</ToastProvider>
 }

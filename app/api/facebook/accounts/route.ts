@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-  }
+  const userEmail = process.env.AUTH_EMAIL!
 
   const { data: user } = await getSupabaseAdmin()
     .from('users')
     .select('id')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
 
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
@@ -25,11 +21,6 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-  }
-
   const { account_id, is_selected } = await req.json()
 
   const { error } = await getSupabaseAdmin()

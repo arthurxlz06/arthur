@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(req: Request) {
-  const session = await auth()
+  const userEmail = process.env.AUTH_EMAIL!
   const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
-
-  if (!session?.user?.email) {
-    return NextResponse.redirect(`${baseUrl}/login`)
-  }
 
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
@@ -46,7 +41,7 @@ export async function GET(req: Request) {
       dropbox_access_token: tokenData.access_token,
       dropbox_refresh_token: tokenData.refresh_token ?? null,
     })
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
 
   return NextResponse.redirect(`${baseUrl}/settings?dropbox=connected`)
 }

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 
@@ -35,13 +34,12 @@ async function getTemporaryLink(token: string, path: string): Promise<string | n
 // GET — lista arquivos de uma pasta
 export async function GET(req: Request) {
   try {
-    const session = await auth()
-    if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const userEmail = process.env.AUTH_EMAIL!
 
     const supabase = getSupabaseAdmin()
     const { data: user } = await supabase
       .from('users').select('id, dropbox_access_token, dropbox_refresh_token')
-      .eq('email', session.user.email).single()
+      .eq('email', userEmail).single()
 
     if (!user?.dropbox_access_token)
       return NextResponse.json({ error: 'Dropbox não conectado' }, { status: 400 })
@@ -87,13 +85,12 @@ export async function GET(req: Request) {
 // POST — vincula um arquivo específico a um criativo
 export async function POST(req: Request) {
   try {
-    const session = await auth()
-    if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const userEmail = process.env.AUTH_EMAIL!
 
     const supabase = getSupabaseAdmin()
     const { data: user } = await supabase
       .from('users').select('id, dropbox_access_token, dropbox_refresh_token')
-      .eq('email', session.user.email).single()
+      .eq('email', userEmail).single()
 
     if (!user?.dropbox_access_token)
       return NextResponse.json({ error: 'Dropbox não conectado' }, { status: 400 })

@@ -16,11 +16,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!email || !password) return null
         if (email !== process.env.AUTH_EMAIL?.toLowerCase() || password !== process.env.AUTH_PASSWORD) return null
 
-        const { data: user } = await getSupabaseAdmin()
+        let { data: user } = await getSupabaseAdmin()
           .from('users')
           .select('id, email, name, avatar_url')
           .eq('email', email)
           .single()
+
+        if (!user) {
+          const { data: created } = await getSupabaseAdmin()
+            .from('users')
+            .insert({ email, name: email.split('@')[0] })
+            .select('id, email, name, avatar_url')
+            .single()
+          user = created
+        }
 
         if (!user) return null
         return { id: user.id as string, email: user.email as string, name: user.name as string | null, image: user.avatar_url as string | null }

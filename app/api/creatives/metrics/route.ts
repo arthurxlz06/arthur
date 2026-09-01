@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 const CACHE_TTL_HOURS = 1
@@ -89,14 +88,13 @@ function buildAds(allRecords: InsightRecord[]) {
 }
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const userEmail = process.env.AUTH_EMAIL!
 
   const supabase = getSupabaseAdmin()
   const { data: user } = await supabase
     .from('users')
     .select('id, facebook_access_token')
-    .eq('email', session.user.email)
+    .eq('email', userEmail)
     .single()
 
   if (!user?.facebook_access_token) {

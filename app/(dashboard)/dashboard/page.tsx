@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useSession } from 'next-auth/react'
 import { Check, X, Clock, Film, TrendingUp, ChevronRight, Zap } from 'lucide-react'
 
 interface Metrics {
@@ -68,7 +67,6 @@ function JobStatusIcon({ status }: { status: string }) {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,8 +80,6 @@ export default function DashboardPage() {
         setLoading(false)
       })
   }, [])
-
-  const firstName = session?.user?.name?.split(' ')[0] ?? ''
 
   const cards = [
     { label: 'Total', value: metrics?.total_jobs ?? 0, Icon: TrendingUp, color: 'var(--accent)' },
@@ -118,7 +114,6 @@ export default function DashboardPage() {
             }}
           >
             {greeting()}
-            {firstName ? `, ${firstName}` : ''}
           </h1>
           <p
             style={{
