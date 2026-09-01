@@ -15,9 +15,22 @@ async function getToken(): Promise<string> {
   throw new Error('Token Meta não encontrado. Defina META_ACCESS_TOKEN no .env.local ou conecte sua conta Meta nas Configurações.')
 }
 
-function getAccountId(): string {
-  const id = process.env.META_AD_ACCOUNT_ID
-  if (!id) throw new Error('META_AD_ACCOUNT_ID não definido no .env.local')
+async function getAccountId(): Promise<string> {
+  if (process.env.META_AD_ACCOUNT_ID) {
+    const id = process.env.META_AD_ACCOUNT_ID
+    return id.startsWith('act_') ? id : `act_${id}`
+  }
+  // Lê a conta selecionada no painel de configurações
+  const { data } = await getSupabaseAdmin()
+    .from('ad_accounts')
+    .select('meta_account_id')
+    .eq('is_selected', true)
+    .limit(1)
+    .single()
+  if (!data?.meta_account_id) {
+    throw new Error('Nenhuma conta de anúncio selecionada. Vá em Configurações → selecione uma conta.')
+  }
+  const id = data.meta_account_id as string
   return id.startsWith('act_') ? id : `act_${id}`
 }
 
@@ -93,7 +106,7 @@ function parseCostPerAction(field: unknown, ...types: string[]): number {
 // ─── Funções públicas ─────────────────────────────────────────────────────────
 
 export async function getCampaigns(dateWindowDays = 7): Promise<CampaignData[]> {
-  const accountId = getAccountId()
+  const accountId = await getAccountId()
   const end = new Date(); const start = new Date(end)
   start.setDate(start.getDate() - (dateWindowDays - 1))
   const fmt = (d: Date) => d.toISOString().split('T')[0]
@@ -148,7 +161,7 @@ export async function getCampaigns(dateWindowDays = 7): Promise<CampaignData[]> 
 
 // Busca rápida: só id + nome (sem insights, sem métricas)
 export async function getCampaignNames(): Promise<{ id: string; name: string }[]> {
-  const accountId = getAccountId()
+  const accountId = await getAccountId()
   type RC = { id: string; name: string }
   const raw = await paginate(`${accountId}/campaigns`, {
     effective_status: '["ACTIVE"]',

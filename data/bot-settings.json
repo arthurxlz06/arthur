@@ -1,0 +1,7 @@
+{
+  "schedule": "0 8 * * *",
+  "dry_run": true,
+  "date_window_days": 7,
+  "last_run": null,
+  "next_run": null
+}

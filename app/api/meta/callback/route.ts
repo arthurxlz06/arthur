@@ -39,12 +39,11 @@ export async function GET(req: Request) {
     const longData = await longRes.json() as { access_token?: string; error?: { message: string } }
     const finalToken = longData.access_token ?? tokenData.access_token
 
-    // Salvar no Supabase
+    // Salvar no Supabase (upsert para criar o usuário se não existir)
     const userEmail = process.env.AUTH_EMAIL!
     await getSupabaseAdmin()
       .from('users')
-      .update({ facebook_access_token: finalToken })
-      .eq('email', userEmail)
+      .upsert({ email: userEmail, facebook_access_token: finalToken }, { onConflict: 'email' })
 
     return NextResponse.redirect(`${baseUrl}/settings?meta_connected=1`)
   } catch (err) {
