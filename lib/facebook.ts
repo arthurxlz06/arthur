@@ -77,6 +77,18 @@ export async function getPersonalAdAccounts(accessToken: string): Promise<MetaAd
   }
 }
 
+export async function getActiveCampaignCount(accountId: string, accessToken: string): Promise<number> {
+  try {
+    const id = accountId.startsWith('act_') ? accountId : `act_${accountId}`
+    const data = await metaFetch<{ data: { id: string }[] }>(
+      `${BASE_URL}/${id}/campaigns?fields=id&effective_status=["ACTIVE"]&limit=200&access_token=${accessToken}`
+    )
+    return data.data?.length ?? 0
+  } catch {
+    return 0
+  }
+}
+
 export async function validateToken(accessToken: string): Promise<boolean> {
   try {
     await metaFetch(`${BASE_URL}/me?fields=id&access_token=${accessToken}`)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getAdAccountsByBM, getClientAdAccounts, getPersonalAdAccounts } from '@/lib/facebook'
+import { getAdAccountsByBM, getClientAdAccounts, getPersonalAdAccounts, getActiveCampaignCount } from '@/lib/facebook'
 
 export async function GET() {
   const userEmail = process.env.AUTH_EMAIL!
@@ -18,12 +18,10 @@ export async function GET() {
     .select('id, name, meta_bm_id, ad_accounts(*)')
     .eq('user_id', user.id)
 
-  // Atualiza status ao vivo da Meta se tiver token
   const token = user.facebook_access_token as string | null
   if (token && bms && bms.length > 0) {
     await refreshAccountStatuses(bms, token).catch(() => {})
 
-    // Re-busca com dados atualizados
     const { data: freshBms } = await getSupabaseAdmin()
       .from('business_managers')
       .select('id, name, meta_bm_id, ad_accounts(*)')
@@ -35,7 +33,7 @@ export async function GET() {
 }
 
 async function refreshAccountStatuses(
-  bms: { id: string; meta_bm_id: string; name: string }[],
+  bms: { id: string; meta_bm_id: string }[],
   token: string
 ) {
   for (const bm of bms) {
@@ -52,25 +50,20 @@ async function refreshAccountStatuses(
         accounts = Array.from(new Map([...owned, ...client].map((a) => [a.id, a])).values())
       }
 
-      for (const acc of accounts) {
-        const status = isAccountActive(acc.account_status) ? 'active' : 'disabled'
+      // Checa campanhas ativas em paralelo para cada conta
+      await Promise.all(accounts.map(async (acc) => {
+        const count = await getActiveCampaignCount(acc.id, token)
+        const status = count > 0 ? 'active' : 'disabled'
         await getSupabaseAdmin()
           .from('ad_accounts')
-          .update({ status, name: acc.name })
+          .update({ status, name: acc.name, active_campaign_count: count })
           .eq('bm_id', bm.id)
           .eq('meta_account_id', acc.id)
-      }
+      }))
     } catch {
       // Não falha a request inteira se uma BM der erro
     }
   }
-}
-
-// account_status da Meta API:
-// 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_RISK_REVIEW,
-// 8=PENDING_SETTLEMENT, 9=IN_GRACE_PERIOD, 100=PENDING_CLOSURE, 101=CLOSED
-function isAccountActive(status: number): boolean {
-  return status === 1 || status === 9 // ACTIVE ou IN_GRACE_PERIOD
 }
 
 export async function PATCH(req: Request) {

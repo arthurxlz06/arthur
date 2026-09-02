@@ -6,6 +6,7 @@ const MIGRATIONS = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_access_token TEXT`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_user_id TEXT`,
+  `ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS active_campaign_count INTEGER DEFAULT 0`,
 ]
 
 let ran = false

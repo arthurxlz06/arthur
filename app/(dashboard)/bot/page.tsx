@@ -477,6 +477,15 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
 const ABAS = ['Campanhas', 'Regras', 'Agendador', 'Histórico'] as const
 type Aba = typeof ABAS[number]
 
+interface BotAccount {
+  id: string
+  name: string
+  meta_account_id: string
+  status: 'active' | 'disabled'
+  is_selected: boolean
+  active_campaign_count: number
+}
+
 export default function BotPage() {
   const [aba, setAba] = useState<Aba>('Campanhas')
   const [campanhas, setCampanhas] = useState<Campaign[]>([])
@@ -491,6 +500,7 @@ export default function BotPage() {
   const [erro, setErro] = useState<string | null>(null)
   const [cronInput, setCronInput] = useState('0 8 * * *')
   const [totalDuplicados, setTotalDuplicados] = useState<number | null>(null)
+  const [contas, setContas] = useState<BotAccount[]>([])
 
   // ── Fetches ───────────────────────────────────────────────────────────────
 
@@ -515,8 +525,12 @@ export default function BotPage() {
     const counts = d.state?.duplicate_counts ?? {}
     setTotalDuplicados(Object.values(counts).reduce((s: number, v) => s + (v as number), 0))
   }
+  const buscarContas = async () => {
+    const r = await fetch('/api/bot/accounts'); const d = await r.json()
+    setContas(d.accounts ?? [])
+  }
 
-  useEffect(() => { buscarRegras(); buscarConfig(); buscarCooldowns() }, [])
+  useEffect(() => { buscarRegras(); buscarConfig(); buscarCooldowns(); buscarContas() }, [])
   useEffect(() => { if (aba === 'Campanhas') buscarCampanhas() }, [aba, buscarCampanhas])
   useEffect(() => { if (aba === 'Histórico') buscarLogs() }, [aba])
 
@@ -617,6 +631,42 @@ export default function BotPage() {
         <div style={{ display: 'flex', gap: '8px', padding: '10px 14px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius-sm)', marginBottom: '14px', alignItems: 'center' }}>
           <X size={14} color="var(--status-error)" style={{ flexShrink: 0 }} />
           <span style={{ fontSize: '13px', color: 'var(--status-error)' }}>{erro}</span>
+        </div>
+      )}
+
+      {/* Painel de Contas */}
+      {contas.length > 0 && (
+        <div style={{ marginBottom: '14px', padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+            Contas — regras serão aplicadas nas selecionadas
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {contas.map(acc => {
+              const ativa = acc.status === 'active'
+              return (
+                <div key={acc.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '6px 12px', borderRadius: 'var(--radius-sm)',
+                  border: `1px solid ${acc.is_selected ? (ativa ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)') : 'var(--bg-border)'}`,
+                  background: acc.is_selected ? (ativa ? 'rgba(34,197,94,0.06)' : 'rgba(234,179,8,0.06)') : 'var(--bg-elevated)',
+                  opacity: acc.is_selected ? 1 : 0.5,
+                }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: ativa ? 'var(--status-success)' : 'var(--status-warning)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: acc.is_selected ? '500' : '400' }}>
+                    {acc.name}
+                  </span>
+                  <span style={{ fontSize: '11px', color: ativa ? 'var(--status-success)' : 'var(--status-warning)' }}>
+                    {ativa ? `${acc.active_campaign_count} camp. ativa${acc.active_campaign_count !== 1 ? 's' : ''}` : 'Pausada'}
+                  </span>
+                  {acc.is_selected && (
+                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '1px 6px', borderRadius: '8px', background: 'var(--accent)', color: '#fff' }}>
+                      SELECIONADA
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
