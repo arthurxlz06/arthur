@@ -54,22 +54,23 @@ async function getToken(): Promise<string> {
 }
 
 async function getAccountId(): Promise<string> {
-  if (process.env.META_AD_ACCOUNT_ID) {
-    const id = process.env.META_AD_ACCOUNT_ID
-    return id.startsWith('act_') ? id : `act_${id}`
-  }
-  // Lê a conta selecionada no painel de configurações
+  // DB tem prioridade — a seleção no painel de Configurações é o que vale
   const { data } = await getSupabaseAdmin()
     .from('ad_accounts')
     .select('meta_account_id')
     .eq('is_selected', true)
     .limit(1)
     .single()
-  if (!data?.meta_account_id) {
-    throw new Error('Nenhuma conta de anúncio selecionada. Vá em Configurações → selecione uma conta.')
+  if (data?.meta_account_id) {
+    const id = data.meta_account_id as string
+    return id.startsWith('act_') ? id : `act_${id}`
   }
-  const id = data.meta_account_id as string
-  return id.startsWith('act_') ? id : `act_${id}`
+  // Fallback para variável de ambiente se nada selecionado no painel
+  if (process.env.META_AD_ACCOUNT_ID) {
+    const id = process.env.META_AD_ACCOUNT_ID
+    return id.startsWith('act_') ? id : `act_${id}`
+  }
+  throw new Error('Nenhuma conta de anúncio selecionada. Vá em Configurações → selecione uma conta.')
 }
 
 async function call(path: string, opts: RequestInit = {}, attempt = 1): Promise<unknown> {
@@ -187,11 +188,8 @@ function parseCostPerAction(field: unknown, ...types: string[]): number {
 
 // ─── Funções públicas ─────────────────────────────────────────────────────────
 
-export async function getCampaigns(dateWindowDays = 7): Promise<CampaignData[]> {
+export async function getCampaigns(since: string, until: string): Promise<CampaignData[]> {
   const accountId = await getAccountId()
-  const end = new Date(); const start = new Date(end)
-  start.setDate(start.getDate() - (dateWindowDays - 1))
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
 
   type RC = { id: string; name: string; daily_budget?: string; effective_status: string }
   type RI = {
@@ -210,7 +208,7 @@ export async function getCampaigns(dateWindowDays = 7): Promise<CampaignData[]> 
     paginate(`${accountId}/insights`, {
       level: 'campaign',
       fields: 'campaign_id,campaign_name,spend,purchase_roas,cpc,cpm,ctr,impressions,clicks,reach,frequency,cost_per_action_type',
-      time_range: JSON.stringify({ since: fmt(start), until: fmt(end) }),
+      time_range: JSON.stringify({ since, until }),
       limit: '100',
     }),
   ])
@@ -275,11 +273,8 @@ export async function getAdNames(): Promise<{ id: string; name: string; effectiv
   return (raw as RA[]).map(a => ({ id: a.id, name: a.name, effective_status: a.effective_status }))
 }
 
-export async function getAdSets(dateWindowDays = 7): Promise<AdSetData[]> {
+export async function getAdSets(since: string, until: string): Promise<AdSetData[]> {
   const accountId = await getAccountId()
-  const end = new Date(); const start = new Date(end)
-  start.setDate(start.getDate() - (dateWindowDays - 1))
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
 
   type RS = { id: string; name: string; campaign_id: string; daily_budget?: string; effective_status: string }
   type RI = {
@@ -296,7 +291,7 @@ export async function getAdSets(dateWindowDays = 7): Promise<AdSetData[]> {
     paginate(`${accountId}/insights`, {
       level: 'adset',
       fields: 'adset_id,adset_name,campaign_id,campaign_name,spend,purchase_roas,cpc,cpm,ctr,impressions,clicks,reach,frequency,cost_per_action_type',
-      time_range: JSON.stringify({ since: fmt(start), until: fmt(end) }),
+      time_range: JSON.stringify({ since, until }),
       limit: '200',
     }),
   ])
@@ -321,11 +316,8 @@ export async function getAdSets(dateWindowDays = 7): Promise<AdSetData[]> {
   })
 }
 
-export async function getAds(dateWindowDays = 7): Promise<AdData[]> {
+export async function getAds(since: string, until: string): Promise<AdData[]> {
   const accountId = await getAccountId()
-  const end = new Date(); const start = new Date(end)
-  start.setDate(start.getDate() - (dateWindowDays - 1))
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
 
   type RA = { id: string; name: string; adset_id: string; effective_status: string }
   type RI = {
@@ -342,7 +334,7 @@ export async function getAds(dateWindowDays = 7): Promise<AdData[]> {
     paginate(`${accountId}/insights`, {
       level: 'ad',
       fields: 'ad_id,ad_name,adset_id,campaign_id,spend,purchase_roas,cpc,cpm,ctr,impressions,clicks,reach,frequency,cost_per_action_type',
-      time_range: JSON.stringify({ since: fmt(start), until: fmt(end) }),
+      time_range: JSON.stringify({ since, until }),
       limit: '200',
     }),
   ])

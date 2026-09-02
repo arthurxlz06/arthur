@@ -3,13 +3,34 @@ import { getCampaigns, toTargetData } from '@/lib/bot/meta'
 import { getRules, getCooldownState } from '@/lib/bot/db'
 import { evaluate } from '@/lib/bot/engine'
 
+function today() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function yesterday() {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().split('T')[0]
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
-    const days = parseInt(searchParams.get('days') || '7', 10)
+
+    // Suporte a since/until (novo) ou days (legado)
+    let since = searchParams.get('since')
+    let until = searchParams.get('until')
+
+    if (!since || !until) {
+      const days = parseInt(searchParams.get('days') || '1', 10)
+      until = today()
+      const start = new Date()
+      start.setDate(start.getDate() - (days - 1))
+      since = start.toISOString().split('T')[0]
+    }
 
     const [campaigns, allRules, cooldownState] = await Promise.all([
-      getCampaigns(days),
+      getCampaigns(since, until),
       getRules(),
       getCooldownState(),
     ])

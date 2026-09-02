@@ -20,16 +20,25 @@ function cooldownKey(itemId: string, ruleId: string) {
   return `${itemId}::${ruleId}`
 }
 
+function windowToRange(days: number): { since: string; until: string } {
+  const until = new Date()
+  const since = new Date(until)
+  since.setDate(since.getDate() - (days - 1))
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  return { since: fmt(since), until: fmt(until) }
+}
+
 async function fetchTargets(level: FilterLevel, dateWindowDays: number): Promise<TargetData[]> {
+  const { since, until } = windowToRange(dateWindowDays)
   if (level === 'adset') {
-    const adsets = await getAdSets(dateWindowDays)
+    const adsets = await getAdSets(since, until)
     return adsets.map(s => toTargetData(s, 'adset'))
   }
   if (level === 'ad') {
-    const ads = await getAds(dateWindowDays)
+    const ads = await getAds(since, until)
     return ads.map(a => toTargetData(a, 'ad'))
   }
-  const campaigns = await getCampaigns(dateWindowDays)
+  const campaigns = await getCampaigns(since, until)
   return campaigns.map(c => toTargetData(c, 'campaign'))
 }
 

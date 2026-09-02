@@ -493,7 +493,9 @@ export default function BotPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [config, setConfig] = useState<Settings | null>(null)
   const [carregando, setCarregando] = useState({ campanhas: false, executar: false, salvar: false })
-  const [janela, setJanela] = useState(7)
+  const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'yesterday_today' | 'custom'>('today')
+  const [customSince, setCustomSince] = useState(() => new Date().toISOString().split('T')[0])
+  const [customUntil, setCustomUntil] = useState(() => new Date().toISOString().split('T')[0])
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState<Rule | null>(null)
   const [resultadoExec, setResultadoExec] = useState<string | null>(null)
@@ -504,15 +506,27 @@ export default function BotPage() {
 
   // ── Fetches ───────────────────────────────────────────────────────────────
 
-  const buscarCampanhas = useCallback(async (dias = janela) => {
+  const getDateRange = useCallback(() => {
+    const fmt = (d: Date) => d.toISOString().split('T')[0]
+    const today = fmt(new Date())
+    const yday = fmt(new Date(Date.now() - 86400000))
+    if (datePreset === 'today') return { since: today, until: today }
+    if (datePreset === 'yesterday') return { since: yday, until: yday }
+    if (datePreset === 'yesterday_today') return { since: yday, until: today }
+    return { since: customSince, until: customUntil }
+  }, [datePreset, customSince, customUntil])
+
+  const buscarCampanhas = useCallback(async () => {
     setCarregando(c => ({ ...c, campanhas: true })); setErro(null)
     try {
-      const r = await fetch(`/api/bot/campaigns?days=${dias}`); const d = await r.json()
+      const { since, until } = getDateRange()
+      const r = await fetch(`/api/bot/campaigns?since=${since}&until=${until}`)
+      const d = await r.json()
       if (d.error) throw new Error(d.error)
       setCampanhas(d.campaigns)
     } catch (e) { setErro((e as Error).message) }
     setCarregando(c => ({ ...c, campanhas: false }))
-  }, [janela])
+  }, [getDateRange])
 
   const buscarRegras   = async () => { const r = await fetch('/api/bot/rules');    const d = await r.json(); setRegras(d.rules ?? []) }
   const buscarLogs     = async () => { const r = await fetch('/api/bot/logs');     const d = await r.json(); setLogs(d.logs ?? []) }
@@ -532,6 +546,7 @@ export default function BotPage() {
 
   useEffect(() => { buscarRegras(); buscarConfig(); buscarCooldowns(); buscarContas() }, [])
   useEffect(() => { if (aba === 'Campanhas') buscarCampanhas() }, [aba, buscarCampanhas])
+  useEffect(() => { if (aba === 'Campanhas') buscarCampanhas() }, [datePreset, customSince, customUntil]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (aba === 'Histórico') buscarLogs() }, [aba])
 
   // ── Toggle simulação ──────────────────────────────────────────────────────
@@ -579,7 +594,7 @@ export default function BotPage() {
 
   const salvarAgendamento = async () => {
     setCarregando(c => ({ ...c, salvar: true }))
-    const r = await fetch('/api/bot/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedule: cronInput, date_window_days: config?.date_window_days ?? 7 }) })
+    const r = await fetch('/api/bot/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedule: cronInput, date_window_days: config?.date_window_days ?? 1 }) })
     const d = await r.json(); setConfig(d.settings)
     setCarregando(c => ({ ...c, salvar: false }))
   }
@@ -696,14 +711,39 @@ export default function BotPage() {
       {/* ════════════ CAMPANHAS ════════════ */}
       {aba === 'Campanhas' && (
         <div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
-            <select style={{ ...sSelect, width: 'auto' }} value={janela} onChange={e => setJanela(Number(e.target.value))}>
-              {[3, 7, 14, 30].map(d => <option key={d} value={d}>Últimos {d} dias</option>)}
-            </select>
-            <button onClick={() => buscarCampanhas(janela)} style={sBtn()}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '14px', flexWrap: 'wrap' }}>
+            {/* Seletor de período */}
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-elevated)', padding: '3px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--bg-border)' }}>
+              {([
+                { key: 'today',          label: 'Hoje'         },
+                { key: 'yesterday',      label: 'Ontem'        },
+                { key: 'yesterday_today',label: 'Ontem + Hoje' },
+                { key: 'custom',         label: 'Personalizado'},
+              ] as const).map(({ key, label }) => (
+                <button key={key} onClick={() => setDatePreset(key)} style={{
+                  padding: '5px 11px', borderRadius: '5px', border: 'none', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: datePreset === key ? '600' : '400',
+                  background: datePreset === key ? 'var(--accent)' : 'transparent',
+                  color: datePreset === key ? '#fff' : 'var(--text-muted)',
+                  transition: 'all .15s',
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {datePreset === 'custom' && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input type="date" value={customSince} onChange={e => setCustomSince(e.target.value)}
+                  style={{ ...sInput, width: 'auto', padding: '5px 9px', fontSize: '12px' }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>até</span>
+                <input type="date" value={customUntil} onChange={e => setCustomUntil(e.target.value)}
+                  style={{ ...sInput, width: 'auto', padding: '5px 9px', fontSize: '12px' }} />
+              </div>
+            )}
+            <button onClick={buscarCampanhas} style={sBtn()}>
               <RefreshCw size={13} style={{ animation: carregando.campanhas ? 'spin .7s linear infinite' : 'none' }} /> Atualizar
             </button>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{campanhas.length} campanhas</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{campanhas.length} campanhas</span>
           </div>
           <div style={{ ...sCard, padding: 0, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 940 }}>
