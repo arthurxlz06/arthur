@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Bot, Play, Plus, Trash2, Edit2, Check, X, ToggleLeft, ToggleRight,
-  RefreshCw, Clock, ShieldCheck, Zap, AlertTriangle, Info, RotateCcw,
+  RefreshCw, Clock, ShieldCheck, Zap, AlertTriangle, Info, RotateCcw, ExternalLink,
 } from 'lucide-react'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -635,40 +635,54 @@ export default function BotPage() {
       )}
 
       {/* Painel de Contas */}
-      {contas.length > 0 && (
-        <div style={{ marginBottom: '14px', padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)' }}>
-          <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
-            Contas — regras serão aplicadas nas selecionadas
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      <div style={{ marginBottom: '14px', ...sCard, padding: '14px 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Contas de Anúncio
+          </span>
+          <button onClick={buscarContas} style={{ ...sBtn(), padding: '4px 10px', fontSize: '11px' }}>
+            <RefreshCw size={11} /> Atualizar
+          </button>
+        </div>
+        {contas.length === 0 ? (
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nenhuma conta conectada. Vá em Configurações → adicione uma BM.</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
             {contas.map(acc => {
               const ativa = acc.status === 'active'
               return (
                 <div key={acc.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '6px 12px', borderRadius: 'var(--radius-sm)',
-                  border: `1px solid ${acc.is_selected ? (ativa ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)') : 'var(--bg-border)'}`,
-                  background: acc.is_selected ? (ativa ? 'rgba(34,197,94,0.06)' : 'rgba(234,179,8,0.06)') : 'var(--bg-elevated)',
-                  opacity: acc.is_selected ? 1 : 0.5,
+                  display: 'flex', flexDirection: 'column', gap: '4px',
+                  padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                  border: `1px solid ${ativa ? 'rgba(34,197,94,0.25)' : 'rgba(100,100,100,0.2)'}`,
+                  background: ativa ? 'rgba(34,197,94,0.04)' : 'var(--bg-elevated)',
                 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: ativa ? 'var(--status-success)' : 'var(--status-warning)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: acc.is_selected ? '500' : '400' }}>
-                    {acc.name}
-                  </span>
-                  <span style={{ fontSize: '11px', color: ativa ? 'var(--status-success)' : 'var(--status-warning)' }}>
-                    {ativa ? `${acc.active_campaign_count} camp. ativa${acc.active_campaign_count !== 1 ? 's' : ''}` : 'Pausada'}
-                  </span>
-                  {acc.is_selected && (
-                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '1px 6px', borderRadius: '8px', background: 'var(--accent)', color: '#fff' }}>
-                      SELECIONADA
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: ativa ? 'var(--status-success)' : 'rgba(150,150,150,0.5)' }} />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {acc.name}
                     </span>
-                  )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '15px' }}>
+                    <span style={{ fontSize: '12px', color: ativa ? 'var(--status-success)' : 'var(--text-muted)' }}>
+                      {ativa ? `${acc.active_campaign_count} campanha${acc.active_campaign_count !== 1 ? 's' : ''} ativa${acc.active_campaign_count !== 1 ? 's' : ''}` : 'Sem campanhas ativas'}
+                    </span>
+                  </div>
+                  <div style={{ paddingLeft: '15px', marginTop: '2px' }}>
+                    {acc.is_selected ? (
+                      <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '8px', background: 'var(--accent)', color: '#fff' }}>
+                        RODANDO REGRAS
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>não selecionada</span>
+                    )}
+                  </div>
                 </div>
               )
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Abas */}
       <div style={{ display: 'flex', gap: '2px', borderBottom: '1px solid var(--bg-border)', marginBottom: '20px' }}>
@@ -969,7 +983,13 @@ export default function BotPage() {
               <tbody>
                 {logs.length === 0 ? (
                   <tr><td colSpan={6} style={{ ...sTd, textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Nenhum registro ainda.</td></tr>
-                ) : logs.map(log => (
+                ) : logs.map(log => {
+                  const selectedAcc = contas.find(c => c.is_selected)
+                  const accountId = selectedAcc?.meta_account_id?.replace('act_', '') ?? ''
+                  const adsManagerUrl = accountId && log.campaign_id
+                    ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${accountId}&selected_campaign_ids=${log.campaign_id}`
+                    : null
+                  return (
                   <tr key={log.id}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -977,7 +997,18 @@ export default function BotPage() {
                       {new Date(log.timestamp).toLocaleString('pt-BR')}
                       {log.dry_run && <span style={{ marginLeft: 5, fontSize: '10px', color: 'var(--status-warning)', background: 'rgba(234,179,8,0.1)', padding: '1px 5px', borderRadius: '3px' }}>SIMULAÇÃO</span>}
                     </td>
-                    <td style={{ ...sTd, fontWeight: '500', color: 'var(--text-primary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.campaign_name}</td>
+                    <td style={{ ...sTd, fontWeight: '500', color: 'var(--text-primary)', maxWidth: 160 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.campaign_name}</span>
+                        {adsManagerUrl && (
+                          <a href={adsManagerUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                            title="Abrir no Ads Manager">
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                    </td>
                     <td style={{ ...sTd, fontSize: '12px', color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.rule_name ?? '—'}</td>
                     <td style={sTd}>
                       <span style={{ fontSize: '11px', fontWeight: '600', color: corAcao(log.action), background: `${corAcao(log.action)}18`, padding: '2px 8px', borderRadius: '10px' }}>{log.action}</span>
@@ -987,7 +1018,8 @@ export default function BotPage() {
                       {log.success ? <Check size={14} color="var(--status-success)" /> : <span title={log.error ?? ''}><X size={14} color="var(--status-error)" /></span>}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
