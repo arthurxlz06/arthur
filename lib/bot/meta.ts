@@ -222,8 +222,10 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
   }
 
   const [rawCamps, rawIns] = await Promise.all([
+    // Sem filtro de status — buscamos TODOS os estados para ter o effective_status correto.
+    // Filtrar aqui por ["ACTIVE","PAUSED"] exclui CAMPAIGN_PAUSED, WITH_ISSUES, etc. e
+    // causa o bug onde campMap.get() retorna undefined e o fallback 'ACTIVE' é usado.
     paginate(`${accountId}/campaigns`, {
-      effective_status: '["ACTIVE","PAUSED"]',
       fields: 'id,name,daily_budget,effective_status',
       limit: '200',
     }),
@@ -237,8 +239,12 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
 
   const campMap = new Map((rawCamps as RC[]).map(c => [c.id, c]))
 
-  // Mantém só campanhas que existem no campMap (ativas ou pausadas — exclui deletadas/arquivadas)
-  return (rawIns as RI[]).filter(ins => campMap.has(ins.campaign_id)).map(ins => {
+  // Exclui apenas campanhas deletadas/arquivadas; mantém ACTIVE, PAUSED, CAMPAIGN_PAUSED, etc.
+  const EXCLUIR = new Set(['DELETED', 'ARCHIVED'])
+  return (rawIns as RI[]).filter(ins => {
+    const camp = campMap.get(ins.campaign_id)
+    return camp && !EXCLUIR.has(camp.effective_status)
+  }).map(ins => {
     const camp = campMap.get(ins.campaign_id)
     const daily_budget = parseInt(camp?.daily_budget ?? '0', 10)
     return {
@@ -257,7 +263,7 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
       cost_per_link_click: parseCostPerAction(ins.cost_per_action_type, 'link_click'),
       daily_budget,
       budget_reais: daily_budget / 100,
-      effective_status: camp?.effective_status ?? 'ACTIVE',
+      effective_status: camp?.effective_status ?? 'PAUSED',
     }
   })
 }

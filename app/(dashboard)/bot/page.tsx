@@ -799,13 +799,27 @@ export default function BotPage() {
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                     <td style={{ ...sTd, fontWeight: '500', color: 'var(--text-primary)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.campaign_name}</td>
                     <td style={sTd}>
-                      <span style={{
-                        fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '10px',
-                        background: c.effective_status === 'ACTIVE' ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.1)',
-                        color: c.effective_status === 'ACTIVE' ? 'var(--status-success)' : 'var(--status-warning)',
-                      }}>
-                        {c.effective_status === 'ACTIVE' ? 'Ativa' : 'Pausada'}
-                      </span>
+                      {(() => {
+                        const s = c.effective_status
+                        const isActive = s === 'ACTIVE'
+                        const label = s === 'ACTIVE' ? 'Ativa'
+                          : s === 'PAUSED' ? 'Pausada'
+                          : s === 'CAMPAIGN_PAUSED' ? 'Camp. Pausada'
+                          : s === 'IN_PROCESS' ? 'Processando'
+                          : s === 'WITH_ISSUES' ? 'Com Problemas'
+                          : s === 'PENDING_REVIEW' ? 'Em Revisão'
+                          : s === 'DISAPPROVED' ? 'Reprovada'
+                          : 'Inativa'
+                        return (
+                          <span style={{
+                            fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '10px',
+                            background: isActive ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.1)',
+                            color: isActive ? 'var(--status-success)' : 'var(--status-warning)',
+                          }}>
+                            {label}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td style={sTd}>R${c.spend.toFixed(2)}</td>
                     <td style={{ ...sTd, color: c.purchase_roas >= 3 ? 'var(--status-success)' : 'var(--text-secondary)', fontWeight: '600' }}>{c.purchase_roas.toFixed(2)}</td>
