@@ -36,15 +36,30 @@ function checkCondition(target: TargetData, cond: RuleCondition): boolean {
   }
 }
 
+// Statuses considerados "ativos" para o filtro 'all'
+// Campanhas PAUSED, DELETED, ARCHIVED, DISAPPROVED são ignoradas
+const ACTIVE_STATUSES = new Set([
+  'ACTIVE',
+  'PENDING_REVIEW',
+  'IN_PROCESS',
+  'PENDING_BILLING_INFO',
+  'WITH_ISSUES', // ativa mas com problemas — ainda conta
+])
+
 function itemMatchesFilter(target: TargetData, rule: Rule): boolean {
   if (rule.campaign_filter === 'name_contains') {
     const text = rule.campaign_filter_text?.toLowerCase().trim()
-    return text ? target.item_name.toLowerCase().includes(text) : true
+    if (!text) return true
+    if (!target.item_name.toLowerCase().includes(text)) return false
+    // Mesmo com nome correspondente, ignora inativas
+    return ACTIVE_STATUSES.has(target.effective_status)
   }
   if (rule.campaign_filter === 'specific') {
+    // Seleção manual respeita o que o usuário escolheu, sem filtrar por status
     return rule.campaign_filter_ids?.includes(target.item_id) ?? false
   }
-  return true // 'all'
+  // 'all' → só ativas/pendentes/em análise
+  return ACTIVE_STATUSES.has(target.effective_status)
 }
 
 function cooldownKey(itemId: string, ruleId: string) {
