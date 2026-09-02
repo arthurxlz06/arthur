@@ -503,6 +503,8 @@ export default function BotPage() {
   const [cronInput, setCronInput] = useState('0 8 * * *')
   const [totalDuplicados, setTotalDuplicados] = useState<number | null>(null)
   const [contas, setContas] = useState<BotAccount[]>([])
+  const [sortKey, setSortKey] = useState<string>('spend')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // ── Fetches ───────────────────────────────────────────────────────────────
 
@@ -745,23 +747,52 @@ export default function BotPage() {
             </button>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{campanhas.length} campanhas</span>
           </div>
+          {(() => {
+            const SORT_COLS: { label: string; key: string | null }[] = [
+              { label: 'Campanha',          key: null },
+              { label: 'Gasto',             key: 'spend' },
+              { label: 'ROAS',              key: 'purchase_roas' },
+              { label: 'CPC',               key: 'cpc' },
+              { label: 'CPM',               key: 'cpm' },
+              { label: 'CTR',               key: 'ctr' },
+              { label: 'Custo/Compra',      key: 'cost_per_purchase' },
+              { label: 'Orçamento',         key: 'budget_reais' },
+              { label: 'Ação Planejada',    key: null },
+              { label: 'Regra / Bloqueio',  key: null },
+            ]
+            const campanhasOrdenadas = [...campanhas].sort((a, b) => {
+              if (!sortKey) return 0
+              const va = (a as unknown as Record<string, number>)[sortKey] ?? 0
+              const vb = (b as unknown as Record<string, number>)[sortKey] ?? 0
+              return sortDir === 'desc' ? vb - va : va - vb
+            })
+            return (
           <div style={{ ...sCard, padding: 0, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 940 }}>
               <thead>
                 <tr>
-                  {['Campanha', 'Gasto', 'ROAS', 'CPC', 'CPM', 'CTR', 'Custo/Compra', 'Orçamento', 'Ação Planejada', 'Regra / Bloqueio'].map(h => (
-                    <th key={h} style={sTh}>{h}</th>
+                  {SORT_COLS.map(({ label, key }) => (
+                    <th key={label} style={{ ...sTh, cursor: key ? 'pointer' : 'default', userSelect: 'none' }}
+                        onClick={() => { if (key) { if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc'); else { setSortKey(key); setSortDir('desc') } } }}>
+                      {label}
+                      {key && sortKey === key && (
+                        <span style={{ marginLeft: 4, fontSize: '10px' }}>{sortDir === 'desc' ? '▼' : '▲'}</span>
+                      )}
+                      {key && sortKey !== key && (
+                        <span style={{ marginLeft: 4, fontSize: '10px', opacity: 0.3 }}>▼</span>
+                      )}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {carregando.campanhas ? (
                   <tr><td colSpan={10} style={{ ...sTd, textAlign: 'center', padding: '32px' }}>Carregando...</td></tr>
-                ) : campanhas.length === 0 ? (
+                ) : campanhasOrdenadas.length === 0 ? (
                   <tr><td colSpan={10} style={{ ...sTd, textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    Nenhuma campanha. Verifique META_AD_ACCOUNT_ID no .env.local.
+                    Nenhuma campanha ativa no período selecionado.
                   </td></tr>
-                ) : campanhas.map(c => (
+                ) : campanhasOrdenadas.map(c => (
                   <tr key={c.campaign_id}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -805,6 +836,8 @@ export default function BotPage() {
               </tbody>
             </table>
           </div>
+            )
+          })()}
         </div>
       )}
 

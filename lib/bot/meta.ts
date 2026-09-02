@@ -96,9 +96,17 @@ async function paginate(path: string, params: Record<string, string>): Promise<u
   do {
     const qs = new URLSearchParams(params)
     if (cursor) qs.set('after', cursor)
-    const data = await call(`${path}?${qs}`) as { data?: unknown[]; paging?: { cursors?: { after?: string } } }
+    const data = await call(`${path}?${qs}`) as {
+      data?: unknown[]
+      paging?: { cursors?: { after?: string }; next?: string }
+    }
     results.push(...(data.data ?? []))
+    // cursors.after funciona para edges (campaigns, adsets, ads)
+    // paging.next (URL completa) é usado pelo endpoint /insights
     cursor = data.paging?.cursors?.after
+    if (!cursor && data.paging?.next) {
+      try { cursor = new URL(data.paging.next).searchParams.get('after') ?? undefined } catch { /* ignora URL inválida */ }
+    }
   } while (cursor)
   return results
 }
@@ -215,7 +223,8 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
 
   const campMap = new Map((rawCamps as RC[]).map(c => [c.id, c]))
 
-  return (rawIns as RI[]).map(ins => {
+  // Filtra insights para incluir só campanhas ATIVAS (exclui pausadas com gasto histórico)
+  return (rawIns as RI[]).filter(ins => campMap.has(ins.campaign_id)).map(ins => {
     const camp = campMap.get(ins.campaign_id)
     const daily_budget = parseInt(camp?.daily_budget ?? '0', 10)
     return {
