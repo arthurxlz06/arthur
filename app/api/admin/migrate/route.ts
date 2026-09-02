@@ -9,14 +9,14 @@ const MIGRATIONS = [
 ]
 
 export async function POST() {
-  // Use full connection string (pooler) — individual host may be IPv6-only
+  // Bypass self-signed cert issues with Supabase pooler
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
   const connectionString = process.env.POSTGRES_URL_NON_POOLING
     || process.env.POSTGRES_URL
-    || `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}/${process.env.POSTGRES_DATABASE || 'postgres'}`
-  const client = new Client({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-  })
+    || `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:5432/${process.env.POSTGRES_DATABASE || 'postgres'}`
+
+  const client = new Client({ connectionString })
 
   try {
     await client.connect()
@@ -30,5 +30,7 @@ export async function POST() {
   } catch (err) {
     await client.end().catch(() => {})
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+  } finally {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1'
   }
 }
