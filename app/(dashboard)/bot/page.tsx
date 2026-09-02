@@ -51,10 +51,12 @@ const HORAS_DIA = Array.from({ length: 24 }, (_, i) => i)
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
+type FilterLevel = 'campaign' | 'adset' | 'ad'
 interface RuleCondition { metric: string; operator: string; value: number }
 interface Rule {
   id: string; name: string; active: boolean
   conditions: RuleCondition[]; action: string; action_value: number
+  filter_level: FilterLevel
   campaign_filter: 'all' | 'name_contains' | 'specific'
   campaign_filter_text: string; campaign_filter_ids: string[]
   cooldown_hours: number; allowed_hours: number[]
@@ -106,13 +108,20 @@ const REGRA_VAZIA = {
   name: '', active: true,
   conditions: [{ ...COND_VAZIA }],
   action: 'scale_pct', action_value: 20,
+  filter_level: 'campaign' as FilterLevel,
   campaign_filter: 'all' as 'all' | 'name_contains' | 'specific',
   campaign_filter_text: '', campaign_filter_ids: [] as string[],
   cooldown_hours: 0, allowed_hours: [] as number[],
   max_duplicates: 0, duplicate_until: '',
 }
 
-interface CampNome { id: string; name: string }
+const NIVEL_LABELS: Record<FilterLevel, string> = {
+  campaign: 'Campanha',
+  adset: 'Conjunto de Anúncio',
+  ad: 'Anúncio',
+}
+
+interface ItemNome { id: string; name: string; effective_status: string }
 
 function FormularioRegra({ inicial, onSalvar, onCancelar }: {
   inicial?: Partial<Rule>
@@ -120,10 +129,11 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
   onCancelar: () => void
 }) {
   const [form, setForm] = useState({ ...REGRA_VAZIA, ...inicial })
-  const [campDisponiveis, setCampDisponiveis] = useState<CampNome[]>([])
-  const [carregandoCamps, setCarregandoCamps] = useState(false)
-  const [erroCamps, setErroCamps] = useState<string | null>(null)
-  const [buscaCamp, setBuscaCamp] = useState('')
+  const [itensDisponiveis, setItensDisponiveis] = useState<ItemNome[]>([])
+  const [carregandoItens, setCarregandoItens] = useState(false)
+  const [erroItens, setErroItens] = useState<string | null>(null)
+  const [busca, setBusca] = useState('')
+  const [apenasAtivas, setApenasAtivas] = useState(true)
 
   const set = (k: string, v: unknown) => setForm(p => ({ ...p, [k]: v }))
 
@@ -140,7 +150,7 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
         : [...p.allowed_hours, h].sort((a, b) => a - b),
     }))
 
-  const toggleCampId = (id: string) =>
+  const toggleItemId = (id: string) =>
     setForm(p => ({
       ...p,
       campaign_filter_ids: p.campaign_filter_ids.includes(id)
@@ -148,22 +158,32 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
         : [...p.campaign_filter_ids, id],
     }))
 
-  // Carrega campanhas ativas quando filtro muda para "specific"
+  // Recarrega itens quando muda nível ou quando muda para "specific"
   useEffect(() => {
-    if (form.campaign_filter !== 'specific' || campDisponiveis.length > 0) return
-    setCarregandoCamps(true); setErroCamps(null)
-    fetch('/api/bot/campaigns/names')
+    if (form.campaign_filter !== 'specific') return
+    setCarregandoItens(true); setErroItens(null); setItensDisponiveis([])
+    fetch(`/api/bot/campaigns/names?level=${form.filter_level}`)
       .then(r => r.json())
-      .then(d => { if (d.error) throw new Error(d.error); setCampDisponiveis(d.campaigns ?? []) })
-      .catch(e => setErroCamps((e as Error).message))
-      .finally(() => setCarregandoCamps(false))
-  }, [form.campaign_filter, campDisponiveis.length])
+      .then(d => { if (d.error) throw new Error(d.error); setItensDisponiveis(d.items ?? []) })
+      .catch(e => setErroItens((e as Error).message))
+      .finally(() => setCarregandoItens(false))
+  }, [form.campaign_filter, form.filter_level])
 
-  const tipoAcao = TIPOS_ACAO.find(t => t.value === form.action)
+  // Quando muda nível, limpa seleção anterior
+  const setNivel = (level: FilterLevel) => {
+    setForm(p => ({ ...p, filter_level: level, campaign_filter_ids: [] }))
+    setItensDisponiveis([])
+  }
+
   const isDuplicate = form.action === 'duplicate'
-  const campsFiltradas = buscaCamp.trim()
-    ? campDisponiveis.filter(c => c.name.toLowerCase().includes(buscaCamp.toLowerCase()))
-    : campDisponiveis
+  const isAd = form.filter_level === 'ad'
+  // Anúncios não têm orçamento próprio — só duplicar faz sentido
+  const tiposAcaoDisponiveis = isAd ? TIPOS_ACAO.filter(t => t.value === 'duplicate') : TIPOS_ACAO
+  const tipoAcao = tiposAcaoDisponiveis.find(t => t.value === form.action) ?? tiposAcaoDisponiveis[0]
+
+  const itensFiltrados = itensDisponiveis
+    .filter(i => !apenasAtivas || i.effective_status === 'ACTIVE')
+    .filter(i => !busca.trim() || i.name.toLowerCase().includes(busca.toLowerCase()))
 
   return (
     <div style={{ padding: '20px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--bg-border)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -213,17 +233,32 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
         </div>
       </div>
 
-      {/* ─── Filtro de campanhas ─── */}
+      {/* ─── Filtro de nível + itens ─── */}
       <div style={{ borderTop: '1px solid var(--bg-border)', paddingTop: '16px' }}>
         <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>
-          Filtro de campanhas
+          Filtro de itens
         </p>
 
+        {/* Seletor de nível */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ ...sLabel, marginBottom: '6px' }}>Nível</label>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {(['campaign', 'adset', 'ad'] as FilterLevel[]).map(lvl => (
+              <button key={lvl} onClick={() => setNivel(lvl)}
+                style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: `1px solid ${form.filter_level === lvl ? 'var(--accent)' : 'var(--bg-border)'}`, background: form.filter_level === lvl ? 'rgba(91,110,245,0.12)' : 'var(--bg-elevated)', color: form.filter_level === lvl ? 'var(--accent)' : 'var(--text-muted)', fontSize: '12px', fontWeight: form.filter_level === lvl ? '600' : '400', cursor: 'pointer' }}>
+                {NIVEL_LABELS[lvl]}
+              </button>
+            ))}
+          </div>
+          {isAd && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>Anúncios não têm orçamento próprio — apenas a ação &quot;Duplicar&quot; está disponível.</p>}
+        </div>
+
+        {/* Tipo de filtro */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
           {[
-            { v: 'all',          l: 'Todas as campanhas' },
-            { v: 'name_contains', l: 'Nome contém...'    },
-            { v: 'specific',     l: 'Selecionar manualmente' },
+            { v: 'all',           l: `Todos os ${form.filter_level === 'campaign' ? 'campanhas' : form.filter_level === 'adset' ? 'conjuntos' : 'anúncios'}` },
+            { v: 'name_contains', l: 'Nome contém...' },
+            { v: 'specific',      l: 'Selecionar manualmente' },
           ].map(opt => (
             <button key={opt.v} onClick={() => set('campaign_filter', opt.v)}
               style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: `1px solid ${form.campaign_filter === opt.v ? 'var(--accent)' : 'var(--bg-border)'}`, background: form.campaign_filter === opt.v ? 'rgba(91,110,245,0.12)' : 'var(--bg-elevated)', color: form.campaign_filter === opt.v ? 'var(--accent)' : 'var(--text-muted)', fontSize: '12px', fontWeight: form.campaign_filter === opt.v ? '600' : '400', cursor: 'pointer' }}>
@@ -237,9 +272,9 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
           <div>
             <input style={sInput} value={form.campaign_filter_text}
               onChange={e => set('campaign_filter_text', e.target.value)}
-              placeholder='ex: aa-68premios' />
+              placeholder={`ex: aa-68premios`} />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              A regra só será aplicada em campanhas cujo nome contenha esse texto (sem distinção de maiúsculas).
+              A regra só será aplicada em {NIVEL_LABELS[form.filter_level].toLowerCase()}s cujo nome contenha esse texto (sem distinção de maiúsculas).
             </p>
           </div>
         )}
@@ -247,40 +282,49 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
         {/* Filtro por seleção manual */}
         {form.campaign_filter === 'specific' && (
           <div>
-            {carregandoCamps && (
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Carregando campanhas ativas...</p>
+            {carregandoItens && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Carregando {NIVEL_LABELS[form.filter_level].toLowerCase()}s...</p>
             )}
-            {erroCamps && (
-              <p style={{ fontSize: '12px', color: 'var(--status-error)' }}>Erro: {erroCamps}</p>
+            {erroItens && (
+              <p style={{ fontSize: '12px', color: 'var(--status-error)' }}>Erro: {erroItens}</p>
             )}
-            {!carregandoCamps && !erroCamps && campDisponiveis.length === 0 && (
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nenhuma campanha ativa encontrada. Verifique o token Meta.</p>
+            {!carregandoItens && !erroItens && itensDisponiveis.length === 0 && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nenhum item encontrado. Verifique o token Meta.</p>
             )}
-            {campDisponiveis.length > 0 && (
+            {itensDisponiveis.length > 0 && (
               <>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
-                  <input style={{ ...sInput, flex: 1 }} value={buscaCamp}
-                    onChange={e => setBuscaCamp(e.target.value)}
-                    placeholder='Buscar campanha...' />
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input style={{ ...sInput, flex: 1, minWidth: 160 }} value={busca}
+                    onChange={e => setBusca(e.target.value)}
+                    placeholder={`Buscar ${NIVEL_LABELS[form.filter_level].toLowerCase()}...`} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <input type="checkbox" checked={apenasAtivas} onChange={e => setApenasAtivas(e.target.checked)}
+                      style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                    Apenas ativas
+                  </label>
                   {form.campaign_filter_ids.length > 0 && (
                     <span style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                      {form.campaign_filter_ids.length} selecionada(s)
+                      {form.campaign_filter_ids.length} selecionado(s)
                     </span>
                   )}
                 </div>
-                <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)' }}>
-                  {campsFiltradas.length === 0 ? (
-                    <p style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>Nenhuma campanha com esse nome.</p>
-                  ) : campsFiltradas.map(c => {
-                    const sel = form.campaign_filter_ids.includes(c.id)
+                <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)' }}>
+                  {itensFiltrados.length === 0 ? (
+                    <p style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>Nenhum item com esse filtro.</p>
+                  ) : itensFiltrados.map(item => {
+                    const sel = form.campaign_filter_ids.includes(item.id)
+                    const ativa = item.effective_status === 'ACTIVE'
                     return (
-                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 13px', cursor: 'pointer', borderBottom: '1px solid var(--bg-border)', background: sel ? 'rgba(91,110,245,0.06)' : 'transparent' }}
+                      <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 13px', cursor: 'pointer', borderBottom: '1px solid var(--bg-border)', background: sel ? 'rgba(91,110,245,0.06)' : 'transparent' }}
                         onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)' }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = sel ? 'rgba(91,110,245,0.06)' : 'transparent' }}>
-                        <input type="checkbox" checked={sel} onChange={() => toggleCampId(c.id)}
+                        <input type="checkbox" checked={sel} onChange={() => toggleItemId(item.id)}
                           style={{ width: '15px', height: '15px', accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
-                        <span style={{ fontSize: '13px', color: sel ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: sel ? '500' : '400', lineHeight: 1.4 }}>
-                          {c.name}
+                        <span style={{ fontSize: '13px', color: sel ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: sel ? '500' : '400', lineHeight: 1.4, flex: 1 }}>
+                          {item.name}
+                        </span>
+                        <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '10px', flexShrink: 0, background: ativa ? 'rgba(34,197,94,0.1)' : 'rgba(100,100,100,0.1)', color: ativa ? 'var(--status-success)' : 'var(--text-muted)' }}>
+                          {ativa ? 'Ativa' : 'Pausada'}
                         </span>
                       </label>
                     )
@@ -301,8 +345,9 @@ function FormularioRegra({ inicial, onSalvar, onCancelar }: {
       {/* Ação */}
       <div>
         <label style={sLabel}>Ação</label>
-        <select style={sSelect} value={form.action} onChange={e => set('action', e.target.value)}>
-          {TIPOS_ACAO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        <select style={sSelect} value={isAd ? 'duplicate' : form.action}
+          onChange={e => set('action', e.target.value)} disabled={isAd}>
+          {tiposAcaoDisponiveis.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         {tipoAcao && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{tipoAcao.desc}</p>}
       </div>
@@ -502,7 +547,9 @@ export default function BotPage() {
 
   const salvarRegra = async (dados: Omit<Rule, 'id' | 'created_at'>) => {
     const url = editando ? `/api/bot/rules/${editando.id}` : '/api/bot/rules'
-    await fetch(url, { method: editando ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) })
+    const r = await fetch(url, { method: editando ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) })
+    const d = await r.json()
+    if (d.error) { setErro(`Erro ao salvar regra: ${d.error}`); return }
     setMostrarForm(false); setEditando(null); buscarRegras()
   }
   const toggleRegra = async (r: Rule) => {
@@ -722,6 +769,9 @@ export default function BotPage() {
 
                     {/* Restrições resumidas */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      <span style={{ fontSize: '11px', background: 'var(--bg-elevated)', border: '1px solid var(--bg-border)', padding: '2px 8px', borderRadius: '10px', color: 'var(--text-muted)' }}>
+                        {NIVEL_LABELS[regra.filter_level ?? 'campaign']}
+                      </span>
                       {regra.campaign_filter === 'name_contains' && regra.campaign_filter_text && (
                         <span style={{ fontSize: '11px', background: 'rgba(91,110,245,0.08)', border: '1px solid rgba(91,110,245,0.2)', padding: '2px 8px', borderRadius: '10px', color: 'var(--accent)' }}>
                           Nome contém: &quot;{regra.campaign_filter_text}&quot;
@@ -729,7 +779,7 @@ export default function BotPage() {
                       )}
                       {regra.campaign_filter === 'specific' && (
                         <span style={{ fontSize: '11px', background: 'rgba(91,110,245,0.08)', border: '1px solid rgba(91,110,245,0.2)', padding: '2px 8px', borderRadius: '10px', color: 'var(--accent)' }}>
-                          {regra.campaign_filter_ids.length} campanha(s) específica(s)
+                          {regra.campaign_filter_ids.length} {NIVEL_LABELS[regra.filter_level ?? 'campaign'].toLowerCase()}(s) específico(s)
                         </span>
                       )}
                       {regra.cooldown_hours > 0 && (

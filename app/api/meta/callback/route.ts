@@ -23,12 +23,11 @@ export async function GET(req: Request) {
       `&code=${code}`
     )
     const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } }
-
     if (tokenData.error || !tokenData.access_token) {
-      throw new Error(tokenData.error?.message ?? 'Token não retornado')
+      throw new Error(tokenData.error?.message ?? 'Token não retornado pelo Facebook')
     }
 
-    // Trocar por token de longa duração
+    // Trocar por token de longa duração (~60 dias)
     const longRes = await fetch(
       `https://graph.facebook.com/v21.0/oauth/access_token?` +
       `grant_type=fb_exchange_token` +
@@ -36,14 +35,47 @@ export async function GET(req: Request) {
       `&client_secret=${process.env.FACEBOOK_CLIENT_SECRET}` +
       `&fb_exchange_token=${tokenData.access_token}`
     )
-    const longData = await longRes.json() as { access_token?: string; error?: { message: string } }
+    const longData = await longRes.json() as {
+      access_token?: string
+      expires_in?: number
+      error?: { message: string }
+    }
     const finalToken = longData.access_token ?? tokenData.access_token
+    // expires_in é em segundos; padrão de 60 dias se não retornado
+    const expiresIn = longData.expires_in ?? 5184000
+    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
-    // Salvar no Supabase (upsert para criar o usuário se não existir)
     const userEmail = process.env.AUTH_EMAIL!
-    await getSupabaseAdmin()
+
+    const { data: existing } = await getSupabaseAdmin()
       .from('users')
-      .upsert({ email: userEmail, facebook_access_token: finalToken }, { onConflict: 'email' })
+      .select('id')
+      .eq('email', userEmail)
+      .maybeSingle()
+
+    if (existing) {
+      const { error: updateError } = await getSupabaseAdmin()
+        .from('users')
+        .update({ facebook_access_token: finalToken, token_expires_at: expiresAt })
+        .eq('email', userEmail)
+
+      if (updateError) {
+        throw new Error(`Erro ao salvar token: ${updateError.message}`)
+      }
+    } else {
+      const { error: insertError } = await getSupabaseAdmin()
+        .from('users')
+        .insert({
+          email: userEmail,
+          name: userEmail.split('@')[0],
+          facebook_access_token: finalToken,
+          token_expires_at: expiresAt,
+        })
+
+      if (insertError) {
+        throw new Error(`Erro ao criar usuário: ${insertError.message}`)
+      }
+    }
 
     return NextResponse.redirect(`${baseUrl}/settings?meta_connected=1`)
   } catch (err) {

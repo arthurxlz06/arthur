@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import 'server-only'
 import { Client } from 'pg'
 
 const MIGRATIONS = [
@@ -8,29 +8,32 @@ const MIGRATIONS = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_user_id TEXT`,
 ]
 
-export async function POST() {
-  // Bypass self-signed cert issues with Supabase pooler
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+let ran = false
+
+export async function runMigrations() {
+  if (ran) return
+  ran = true
 
   const connectionString = process.env.POSTGRES_URL_NON_POOLING
     || process.env.POSTGRES_URL
     || `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:5432/${process.env.POSTGRES_DATABASE || 'postgres'}`
 
+  if (!connectionString || connectionString.includes('undefined')) return
+
+  const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
   const client = new Client({ connectionString })
 
   try {
     await client.connect()
-    const results = []
     for (const sql of MIGRATIONS) {
       await client.query(sql)
-      results.push({ sql: sql.slice(0, 70), ok: true })
     }
     await client.end()
-    return NextResponse.json({ ok: true, results })
   } catch (err) {
+    console.error('[migrations] erro:', err)
     await client.end().catch(() => {})
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
   } finally {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1'
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev ?? '1'
   }
 }

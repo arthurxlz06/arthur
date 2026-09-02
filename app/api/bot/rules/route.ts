@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       conditions: body.conditions,
       action: body.action,
       action_value: Number(body.action_value) || 0,
+      filter_level: body.filter_level ?? 'campaign',
       campaign_filter: body.campaign_filter ?? 'all',
       campaign_filter_text: body.campaign_filter_text ?? '',
       campaign_filter_ids: Array.isArray(body.campaign_filter_ids) ? body.campaign_filter_ids : [],

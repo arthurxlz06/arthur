@@ -1,4 +1,4 @@
-const BASE_URL = `https://graph.facebook.com/${process.env.META_API_VERSION}`
+const BASE_URL = `https://graph.facebook.com/${process.env.META_API_VERSION || 'v21.0'}`
 
 interface MetaBusiness {
   id: string
@@ -65,6 +65,17 @@ export async function getClientAdAccounts(
   return data.data
 }
 
+
+export async function getPersonalAdAccounts(accessToken: string): Promise<MetaAdAccount[]> {
+  try {
+    const data = await metaFetch<{ data: MetaAdAccount[] }>(
+      `${BASE_URL}/me/adaccounts?fields=id,name,account_status,account_id&access_token=${accessToken}`
+    )
+    return data.data ?? []
+  } catch {
+    return []
+  }
+}
 
 export async function validateToken(accessToken: string): Promise<boolean> {
   try {

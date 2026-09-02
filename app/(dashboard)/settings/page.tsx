@@ -28,10 +28,11 @@ interface BmAvailable {
 
 // ─── ConnectionCard ───────────────────────────────────────────────────────────
 
-function ConnectionCard({ logo, name, description, status, onConnect, onDisconnect, connecting, disconnecting }: {
-  logo: React.ReactNode; name: string; description: string; status: Status
+function ConnectionCard({ logo, name, description, status, daysLeft, onConnect, onDisconnect, connecting, disconnecting }: {
+  logo: React.ReactNode; name: string; description: string; status: Status; daysLeft?: number | null
   onConnect: () => void; onDisconnect: () => void; connecting: boolean; disconnecting: boolean
 }) {
+  const expiring = daysLeft !== null && daysLeft !== undefined && daysLeft <= 14
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-md)', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: '200px' }}>
@@ -39,6 +40,11 @@ function ConnectionCard({ logo, name, description, status, onConnect, onDisconne
         <div>
           <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '3px' }}>{name}</p>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{description}</p>
+          {status === 'connected' && daysLeft !== null && daysLeft !== undefined && (
+            <p style={{ fontSize: '12px', color: expiring ? 'var(--status-warning, #f59e0b)' : 'var(--text-muted)', marginTop: '2px' }}>
+              {expiring ? `Token expira em ${daysLeft} dia${daysLeft !== 1 ? 's' : ''} — reconecte em breve` : `Token válido por ~${daysLeft} dias`}
+            </p>
+          )}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
@@ -82,9 +88,12 @@ function BmAccountSection() {
 
   useEffect(() => { fetchConnected() }, [])
 
+  const [bmError, setBmError] = useState<string | null>(null)
+
   const openPicker = async () => {
-    setShowPicker(true); setLoadingAvail(true)
+    setShowPicker(true); setLoadingAvail(true); setBmError(null)
     const d = await fetch('/api/facebook/businesses').then(r => r.json())
+    if (d.error) setBmError(d.error)
     setAvailable(d.businesses ?? [])
     setLoadingAvail(false)
   }
@@ -139,8 +148,10 @@ function BmAccountSection() {
           </div>
           {loadingAvail ? (
             <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Carregando...</p>
+          ) : bmError ? (
+            <p style={{ fontSize: '13px', color: 'var(--status-error)' }}>Erro: {bmError}</p>
           ) : available.length === 0 ? (
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nenhuma BM encontrada nessa conta.</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nenhuma conta encontrada. Tente reconectar o Meta.</p>
           ) : available.map(bm => (
             <div key={bm.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--bg-border)' }}>
               <div>
@@ -226,6 +237,7 @@ function BmAccountSection() {
 
 export default function SettingsPage() {
   const [metaStatus, setMetaStatus] = useState<Status>('loading')
+  const [metaDaysLeft, setMetaDaysLeft] = useState<number | null>(null)
   const [dropboxStatus, setDropboxStatus] = useState<Status>('loading')
   const [metaDisconnecting, setMetaDisconnecting] = useState(false)
   const [dropboxDisconnecting, setDropboxDisconnecting] = useState(false)
@@ -234,24 +246,38 @@ export default function SettingsPage() {
   const showToast = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 4000) }
 
   useEffect(() => {
-    fetch('/api/meta/status').then(r => r.json()).then((d: { connected?: boolean }) => setMetaStatus(d.connected ? 'connected' : 'disconnected')).catch(() => setMetaStatus('disconnected'))
-    fetch('/api/dropbox/status').then(r => r.json()).then((d: { connected?: boolean }) => setDropboxStatus(d.connected ? 'connected' : 'disconnected')).catch(() => setDropboxStatus('disconnected'))
-
     const p = new URLSearchParams(window.location.search)
-    if (p.get('meta_connected') === '1') {
+    const metaConnected = p.get('meta_connected') === '1'
+    const metaError = p.get('meta_error')
+    const dropboxParam = p.get('dropbox')
+
+    if (metaConnected) {
       setMetaStatus('connected')
       showToast('Meta conectado com sucesso!', true)
-      window.history.replaceState({}, '', '/settings')
-    } else if (p.get('meta_error')) {
-      showToast('Erro ao conectar Meta: ' + decodeURIComponent(p.get('meta_error')!), false)
-      window.history.replaceState({}, '', '/settings')
-    } else if (p.get('dropbox') === 'connected') {
+    } else if (metaError) {
+      setMetaStatus('disconnected')
+      showToast('Erro ao conectar Meta: ' + decodeURIComponent(metaError), false)
+    }
+    if (dropboxParam === 'connected') {
       setDropboxStatus('connected')
       showToast('Dropbox conectado com sucesso!', true)
-      window.history.replaceState({}, '', '/settings')
-    } else if (p.get('dropbox') === 'error') {
+    } else if (dropboxParam === 'error') {
+      setDropboxStatus('disconnected')
       showToast('Erro ao conectar o Dropbox. Tente novamente.', false)
+    }
+    if (metaConnected || metaError || dropboxParam) {
       window.history.replaceState({}, '', '/settings')
+    }
+
+    // Só busca status da API se não há parâmetro de URL (evita race condition)
+    if (!metaConnected && !metaError) {
+      fetch('/api/meta/status').then(r => r.json()).then((d: { connected?: boolean; days_left?: number | null }) => {
+        setMetaStatus(d.connected ? 'connected' : 'disconnected')
+        setMetaDaysLeft(d.days_left ?? null)
+      }).catch(() => setMetaStatus('disconnected'))
+    }
+    if (!dropboxParam) {
+      fetch('/api/dropbox/status').then(r => r.json()).then((d: { connected?: boolean }) => setDropboxStatus(d.connected ? 'connected' : 'disconnected')).catch(() => setDropboxStatus('disconnected'))
     }
   }, [])
 
@@ -281,6 +307,7 @@ export default function SettingsPage() {
           name="Meta (Facebook Ads)"
           description="Necessário para puxar métricas das campanhas e criativos"
           status={metaStatus}
+          daysLeft={metaDaysLeft}
           onConnect={() => { window.location.href = '/api/meta/oauth' }}
           onDisconnect={handleMetaDisconnect}
           connecting={false}

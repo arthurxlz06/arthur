@@ -13,6 +13,8 @@ export interface RuleCondition {
 
 export type RuleAction = 'scale_pct' | 'scale_fixed' | 'set_budget' | 'duplicate'
 
+export type FilterLevel = 'campaign' | 'adset' | 'ad'
+
 export interface Rule {
   id: string
   name: string
@@ -21,7 +23,10 @@ export interface Rule {
   action: RuleAction
   action_value: number
 
-  // Filtro de campanhas
+  // Nível de filtro: campanha, conjunto ou anúncio
+  filter_level: FilterLevel
+
+  // Filtro de itens no nível selecionado
   campaign_filter: 'all' | 'name_contains' | 'specific'
   campaign_filter_text: string
   campaign_filter_ids: string[]
@@ -38,6 +43,7 @@ export interface Rule {
 }
 
 const RULE_DEFAULTS = {
+  filter_level: 'campaign' as FilterLevel,
   campaign_filter: 'all' as const,
   campaign_filter_text: '',
   campaign_filter_ids: [] as string[],
@@ -56,6 +62,7 @@ function rowToRule(row: Record<string, unknown>): Rule {
     conditions: (row.conditions as RuleCondition[]) ?? [],
     action: row.action as RuleAction,
     action_value: Number(row.action_value),
+    filter_level: (row.filter_level as FilterLevel) ?? 'campaign',
     campaign_filter: (row.campaign_filter as Rule['campaign_filter']) ?? 'all',
     campaign_filter_text: (row.campaign_filter_text as string) ?? '',
     campaign_filter_ids: (row.campaign_filter_ids as string[]) ?? [],
@@ -85,6 +92,7 @@ export async function createRule(data: Omit<Rule, 'id' | 'created_at'>): Promise
       conditions: data.conditions,
       action: data.action,
       action_value: data.action_value,
+      filter_level: data.filter_level,
       campaign_filter: data.campaign_filter,
       campaign_filter_text: data.campaign_filter_text,
       campaign_filter_ids: data.campaign_filter_ids,
