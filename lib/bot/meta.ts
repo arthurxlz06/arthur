@@ -92,22 +92,36 @@ async function call(path: string, opts: RequestInit = {}, attempt = 1): Promise<
 
 async function paginate(path: string, params: Record<string, string>): Promise<unknown[]> {
   const results: unknown[] = []
-  let cursor: string | undefined
-  do {
-    const qs = new URLSearchParams(params)
-    if (cursor) qs.set('after', cursor)
-    const data = await call(`${path}?${qs}`) as {
+  // currentPath começa com o path original + params; após a primeira página pode ser
+  // substituído pelo path relativo extraído de paging.next (usado pelo endpoint /insights)
+  let currentPath: string | null = `${path}?${new URLSearchParams(params)}`
+
+  while (currentPath) {
+    const data = await call(currentPath) as {
       data?: unknown[]
       paging?: { cursors?: { after?: string }; next?: string }
     }
     results.push(...(data.data ?? []))
-    // cursors.after funciona para edges (campaigns, adsets, ads)
-    // paging.next (URL completa) é usado pelo endpoint /insights
-    cursor = data.paging?.cursors?.after
-    if (!cursor && data.paging?.next) {
-      try { cursor = new URL(data.paging.next).searchParams.get('after') ?? undefined } catch { /* ignora URL inválida */ }
+
+    const after = data.paging?.cursors?.after
+    if (after) {
+      // Cursor explícito: adiciona ao path original para manter os demais params
+      const p = new URLSearchParams(params)
+      p.set('after', after)
+      currentPath = `${path}?${p}`
+    } else if (data.paging?.next) {
+      // paging.next é uma URL completa; extrai o path relativo a BASE para call()
+      try {
+        const nextUrl = new URL(data.paging.next)
+        const prefix = `/${API_VERSION}/`
+        currentPath = nextUrl.pathname.startsWith(prefix)
+          ? nextUrl.pathname.slice(prefix.length) + nextUrl.search
+          : null
+      } catch { currentPath = null }
+    } else {
+      currentPath = null
     }
-  } while (cursor)
+  }
   return results
 }
 
@@ -209,21 +223,21 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
 
   const [rawCamps, rawIns] = await Promise.all([
     paginate(`${accountId}/campaigns`, {
-      effective_status: '["ACTIVE"]',
+      effective_status: '["ACTIVE","PAUSED"]',
       fields: 'id,name,daily_budget,effective_status',
-      limit: '100',
+      limit: '200',
     }),
     paginate(`${accountId}/insights`, {
       level: 'campaign',
       fields: 'campaign_id,campaign_name,spend,purchase_roas,cpc,cpm,ctr,impressions,clicks,reach,frequency,cost_per_action_type',
       time_range: JSON.stringify({ since, until }),
-      limit: '100',
+      limit: '200',
     }),
   ])
 
   const campMap = new Map((rawCamps as RC[]).map(c => [c.id, c]))
 
-  // Filtra insights para incluir só campanhas ATIVAS (exclui pausadas com gasto histórico)
+  // Mantém só campanhas que existem no campMap (ativas ou pausadas — exclui deletadas/arquivadas)
   return (rawIns as RI[]).filter(ins => campMap.has(ins.campaign_id)).map(ins => {
     const camp = campMap.get(ins.campaign_id)
     const daily_budget = parseInt(camp?.daily_budget ?? '0', 10)

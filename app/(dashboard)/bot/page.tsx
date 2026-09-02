@@ -742,7 +742,7 @@ export default function BotPage() {
                   style={{ ...sInput, width: 'auto', padding: '5px 9px', fontSize: '12px' }} />
               </div>
             )}
-            <button onClick={buscarCampanhas} style={sBtn()}>
+            <button onClick={() => { buscarCampanhas(); buscarContas() }} style={sBtn()}>
               <RefreshCw size={13} style={{ animation: carregando.campanhas ? 'spin .7s linear infinite' : 'none' }} /> Atualizar
             </button>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{campanhas.length} campanhas</span>
@@ -750,6 +750,7 @@ export default function BotPage() {
           {(() => {
             const SORT_COLS: { label: string; key: string | null }[] = [
               { label: 'Campanha',          key: null },
+              { label: 'Status',            key: null },
               { label: 'Gasto',             key: 'spend' },
               { label: 'ROAS',              key: 'purchase_roas' },
               { label: 'CPC',               key: 'cpc' },
@@ -787,16 +788,25 @@ export default function BotPage() {
               </thead>
               <tbody>
                 {carregando.campanhas ? (
-                  <tr><td colSpan={10} style={{ ...sTd, textAlign: 'center', padding: '32px' }}>Carregando...</td></tr>
+                  <tr><td colSpan={11} style={{ ...sTd, textAlign: 'center', padding: '32px' }}>Carregando...</td></tr>
                 ) : campanhasOrdenadas.length === 0 ? (
-                  <tr><td colSpan={10} style={{ ...sTd, textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    Nenhuma campanha ativa no período selecionado.
+                  <tr><td colSpan={11} style={{ ...sTd, textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                    Nenhuma campanha no período selecionado.
                   </td></tr>
                 ) : campanhasOrdenadas.map(c => (
                   <tr key={c.campaign_id}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                     <td style={{ ...sTd, fontWeight: '500', color: 'var(--text-primary)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.campaign_name}</td>
+                    <td style={sTd}>
+                      <span style={{
+                        fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '10px',
+                        background: c.effective_status === 'ACTIVE' ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.1)',
+                        color: c.effective_status === 'ACTIVE' ? 'var(--status-success)' : 'var(--status-warning)',
+                      }}>
+                        {c.effective_status === 'ACTIVE' ? 'Ativa' : 'Pausada'}
+                      </span>
+                    </td>
                     <td style={sTd}>R${c.spend.toFixed(2)}</td>
                     <td style={{ ...sTd, color: c.purchase_roas >= 3 ? 'var(--status-success)' : 'var(--text-secondary)', fontWeight: '600' }}>{c.purchase_roas.toFixed(2)}</td>
                     <td style={sTd}>R${c.cpc.toFixed(2)}</td>

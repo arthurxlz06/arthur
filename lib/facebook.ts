@@ -80,10 +80,31 @@ export async function getPersonalAdAccounts(accessToken: string): Promise<MetaAd
 export async function getActiveCampaignCount(accountId: string, accessToken: string): Promise<number> {
   try {
     const id = accountId.startsWith('act_') ? accountId : `act_${accountId}`
-    const data = await metaFetch<{ data: { id: string }[] }>(
-      `${BASE_URL}/${id}/campaigns?fields=id&effective_status=["ACTIVE"]&limit=200&access_token=${accessToken}`
-    )
-    return data.data?.length ?? 0
+    let count = 0
+    let after: string | undefined
+
+    do {
+      const params = new URLSearchParams({
+        fields: 'id',
+        effective_status: '["ACTIVE"]',
+        limit: '200',
+        access_token: accessToken,
+      })
+      if (after) params.set('after', after)
+
+      const data = await metaFetch<{
+        data: { id: string }[]
+        paging?: { cursors?: { after?: string }; next?: string }
+      }>(`${BASE_URL}/${id}/campaigns?${params}`)
+
+      count += data.data?.length ?? 0
+      after = data.paging?.cursors?.after
+      if (!after && data.paging?.next) {
+        try { after = new URL(data.paging.next).searchParams.get('after') ?? undefined } catch { /* ignore */ }
+      }
+    } while (after)
+
+    return count
   } catch {
     return 0
   }
