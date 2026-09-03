@@ -20,6 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(archivedItems.some((n) => n.href === pathname))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024)
@@ -74,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 letterSpacing: '-0.03em',
               }}
             >
-              AdUploader
+              68Prêmios
             </span>
           </div>
           <button
@@ -150,32 +151,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 letterSpacing: '-0.03em',
               }}
             >
-              AdUploader
+              68Prêmios
             </span>
           </div>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '16px 12px' }}>
-          {navItems.map(({ href, icon: Icon, label }) => {
+        <nav style={{ flex: 1, padding: '16px 12px', overflowY: 'auto' }}>
+          {/* Active pages */}
+          {activeItems.map(({ href, icon: Icon, label }) => {
             const active = pathname === href
             return (
               <Link
                 key={href}
                 href={href}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '9px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  marginBottom: '2px',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '9px 10px', borderRadius: 'var(--radius-sm)', marginBottom: '2px',
                   color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
                   background: active ? 'var(--bg-elevated)' : 'transparent',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: active ? '500' : '400',
-                  transition: 'all 200ms ease',
+                  textDecoration: 'none', fontSize: '14px',
+                  fontWeight: active ? '500' : '400', transition: 'all 200ms ease',
                 }}
               >
                 <Icon size={16} />
@@ -183,6 +179,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             )
           })}
+
+          {/* Archived group */}
+          <div style={{ marginTop: '12px' }}>
+            <button
+              onClick={() => setArchiveOpen((v) => !v)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: '11px', fontWeight: '600',
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+                marginBottom: '2px', transition: 'color 150ms',
+              }}
+            >
+              <Archive size={12} />
+              <span style={{ flex: 1, textAlign: 'left' }}>Arquivado</span>
+              <span style={{ fontSize: '10px', transition: 'transform 200ms', display: 'inline-block', transform: archiveOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+            </button>
+
+            {archiveOpen && archivedItems.map(({ href, icon: Icon, label }) => {
+              const active = pathname === href
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '8px 10px 8px 28px', borderRadius: 'var(--radius-sm)', marginBottom: '2px',
+                    color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+                    background: active ? 'var(--bg-elevated)' : 'transparent',
+                    textDecoration: 'none', fontSize: '13px',
+                    fontWeight: active ? '500' : '400', transition: 'all 200ms ease',
+                  }}
+                >
+                  <Icon size={14} />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
         </nav>
       </aside>
 

@@ -138,7 +138,9 @@ async function processPublishJob(job: Job<PublishJobData>) {
   }
 }
 
-export const publishWorker = new Worker<PublishJobData>('publish-jobs', processPublishJob, {
+export const publishWorker = new Worker<PublishJobData>('publish-jobs', async (job) => {
+  return processPublishJob(job)
+}, {
   connection: redis,
   concurrency: 2,
   limiter: { max: 10, duration: 60_000 },
