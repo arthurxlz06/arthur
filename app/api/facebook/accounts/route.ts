@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getAdAccountsByBM, getClientAdAccounts, getPersonalAdAccounts, getActiveCampaignCount } from '@/lib/facebook'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const userEmail = process.env.AUTH_EMAIL!
 

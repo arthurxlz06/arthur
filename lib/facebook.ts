@@ -20,7 +20,7 @@ interface MetaApiError {
 
 async function metaFetch<T>(url: string, retries = 3): Promise<T> {
   for (let attempt = 0; attempt < retries; attempt++) {
-    const res = await fetch(url)
+    const res = await fetch(url, { cache: 'no-store' })
     const data = await res.json()
 
     if (data.error) {
@@ -80,23 +80,27 @@ export async function getPersonalAdAccounts(accessToken: string): Promise<MetaAd
 export async function getActiveCampaignCount(accountId: string, accessToken: string): Promise<number> {
   try {
     const id = accountId.startsWith('act_') ? accountId : `act_${accountId}`
+    const today = new Date().toISOString().split('T')[0]
+
+    // Conta campanhas que realmente gastaram dinheiro hoje (entregando ativamente)
+    // Isso exclui campanhas "ligadas" mas sem entrega, que effective_status=ACTIVE não filtra
+    const params = new URLSearchParams({
+      level: 'campaign',
+      fields: 'campaign_id',
+      time_range: JSON.stringify({ since: today, until: today }),
+      filtering: JSON.stringify([{ field: 'spend', operator: 'GREATER_THAN', value: '0' }]),
+      limit: '500',
+      access_token: accessToken,
+    })
+
     let count = 0
     let after: string | undefined
-
     do {
-      const params = new URLSearchParams({
-        fields: 'id',
-        effective_status: '["ACTIVE"]',
-        limit: '200',
-        access_token: accessToken,
-      })
       if (after) params.set('after', after)
-
       const data = await metaFetch<{
-        data: { id: string }[]
+        data: { campaign_id: string }[]
         paging?: { cursors?: { after?: string }; next?: string }
-      }>(`${BASE_URL}/${id}/campaigns?${params}`)
-
+      }>(`${BASE_URL}/${id}/insights?${params}`)
       count += data.data?.length ?? 0
       after = data.paging?.cursors?.after
       if (!after && data.paging?.next) {

@@ -75,9 +75,13 @@ export async function runBot(): Promise<RunResult> {
 
   let totalAnalyzed = 0, actions_taken = 0, errors = 0
 
+  // Mesmos status que o engine considera "ativos" — campanhas PAUSED, ARCHIVED, etc. são ignoradas
+  const RUNNER_ACTIVE = new Set(['ACTIVE', 'PENDING_REVIEW', 'IN_PROCESS', 'PENDING_BILLING_INFO', 'WITH_ISSUES'])
+
   for (const level of levels) {
     const rulesForLevel = activeRules.filter(r => (r.filter_level ?? 'campaign') === level)
-    const targets = await fetchTargets(level, date_window_days)
+    const allTargets = await fetchTargets(level, date_window_days)
+    const targets = allTargets.filter(t => RUNNER_ACTIVE.has(t.effective_status))
     const planned = evaluate(targets, rulesForLevel, cooldownState, now)
     totalAnalyzed += targets.length
 

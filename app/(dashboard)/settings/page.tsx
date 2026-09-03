@@ -78,13 +78,14 @@ function BmAccountSection() {
   const [showPicker, setShowPicker] = useState(false)
   const [loadingAvail, setLoadingAvail] = useState(false)
   const [loadingBm, setLoadingBm] = useState<string | null>(null)
+  const [syncingBm, setSyncingBm] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<string | null>(null)
 
   const notify = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   const fetchConnected = () =>
-    fetch('/api/facebook/accounts').then(r => r.json()).then(d => setConnected(d.bms ?? []))
+    fetch(`/api/facebook/accounts?_=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()).then(d => setConnected(d.bms ?? []))
 
   useEffect(() => { fetchConnected() }, [])
 
@@ -192,11 +193,14 @@ function BmAccountSection() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => {
-                      fetch('/api/facebook/businesses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bm_id: bm.meta_bm_id, bm_name: bm.name }) })
-                        .then(() => { notify('Contas atualizadas'); fetchConnected() })
-                    }} title="Atualizar contas" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-muted)' }}>
-                      <RefreshCw size={13} />
+                    <button onClick={async () => {
+                      setSyncingBm(bm.meta_bm_id)
+                      await fetch('/api/facebook/businesses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bm_id: bm.meta_bm_id, bm_name: bm.name }) })
+                      await fetchConnected()
+                      setSyncingBm(null)
+                      notify('Contas atualizadas')
+                    }} title="Atualizar contas" disabled={syncingBm === bm.meta_bm_id} style={{ background: 'none', border: 'none', cursor: syncingBm === bm.meta_bm_id ? 'wait' : 'pointer', padding: '4px', color: 'var(--text-muted)', opacity: syncingBm === bm.meta_bm_id ? 0.5 : 1 }}>
+                      <RefreshCw size={13} style={{ animation: syncingBm === bm.meta_bm_id ? 'spin .7s linear infinite' : 'none' }} />
                     </button>
                     <button onClick={() => removeBm(bm)} title="Remover BM" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--status-error)' }}>
                       <Trash2 size={13} />

@@ -492,7 +492,7 @@ export default function BotPage() {
   const [regras, setRegras] = useState<Rule[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [config, setConfig] = useState<Settings | null>(null)
-  const [carregando, setCarregando] = useState({ campanhas: false, executar: false, salvar: false })
+  const [carregando, setCarregando] = useState({ campanhas: false, executar: false, salvar: false, contas: false })
   const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'yesterday_today' | 'custom'>('today')
   const [customSince, setCustomSince] = useState(() => new Date().toISOString().split('T')[0])
   const [customUntil, setCustomUntil] = useState(() => new Date().toISOString().split('T')[0])
@@ -503,6 +503,9 @@ export default function BotPage() {
   const [cronInput, setCronInput] = useState('0 8 * * *')
   const [totalDuplicados, setTotalDuplicados] = useState<number | null>(null)
   const [contas, setContas] = useState<BotAccount[]>([])
+  const [contasErro, setContasErro] = useState<string | null>(null)
+  const [contasAt, setContasAt] = useState<Date | null>(null)
+  const [contasAgoLabel, setContasAgoLabel] = useState<string>('')
   const [sortKey, setSortKey] = useState<string>('spend')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -542,14 +545,46 @@ export default function BotPage() {
     setTotalDuplicados(Object.values(counts).reduce((s: number, v) => s + (v as number), 0))
   }
   const buscarContas = async () => {
-    const r = await fetch('/api/bot/accounts'); const d = await r.json()
-    setContas(d.accounts ?? [])
+    setCarregando(c => ({ ...c, contas: true }))
+    setContasErro(null)
+    setContas([]) // limpa imediatamente para o user ver que atualizou
+    try {
+      const r = await fetch('/api/bot/accounts?t=' + Date.now())
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await r.json()
+      setContas(d.accounts ?? [])
+      setContasAt(new Date())
+    } catch (e) {
+      setContasErro(String(e))
+    } finally {
+      setCarregando(c => ({ ...c, contas: false }))
+    }
   }
+
+  // Atualiza label "há X min" a cada 30s
+  useEffect(() => {
+    const update = () => {
+      if (!contasAt) { setContasAgoLabel(''); return }
+      const diff = Math.floor((Date.now() - contasAt.getTime()) / 60000)
+      if (diff < 1) setContasAgoLabel('agora mesmo')
+      else if (diff === 1) setContasAgoLabel('há 1 min')
+      else setContasAgoLabel(`há ${diff} min`)
+    }
+    update()
+    const id = setInterval(update, 30_000)
+    return () => clearInterval(id)
+  }, [contasAt])
 
   useEffect(() => { buscarRegras(); buscarConfig(); buscarCooldowns(); buscarContas() }, [])
   useEffect(() => { if (aba === 'Campanhas') buscarCampanhas() }, [aba, buscarCampanhas])
   useEffect(() => { if (aba === 'Campanhas') buscarCampanhas() }, [datePreset, customSince, customUntil]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (aba === 'Histórico') buscarLogs() }, [aba])
+
+  // Auto-refresh das contas a cada 5 minutos
+  useEffect(() => {
+    const id = setInterval(() => { buscarContas() }, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Toggle simulação ──────────────────────────────────────────────────────
 
@@ -569,7 +604,7 @@ export default function BotPage() {
       if (d.error) throw new Error(d.error)
       setResultadoExec(`${d.actions_taken} ação(ões) ${d.dry_run ? '(simulação)' : 'executadas'} em ${d.campaigns_analyzed} campanhas`)
       if (aba === 'Histórico') buscarLogs()
-      buscarConfig(); buscarCooldowns()
+      buscarConfig(); buscarCooldowns(); buscarContas()
     } catch (e) { setErro((e as Error).message) }
     setCarregando(c => ({ ...c, executar: false }))
   }
@@ -605,7 +640,7 @@ export default function BotPage() {
 
   return (
     <div className="page-enter" style={{ maxWidth: 1020 }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } } select { background: var(--bg-elevated); }`}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes flashIn { 0% { opacity: 0.3; } 100% { opacity: 1; } } select { background: var(--bg-elevated); }`}</style>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
@@ -657,11 +692,24 @@ export default function BotPage() {
           <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Contas de Anúncio
           </span>
-          <button onClick={buscarContas} style={{ ...sBtn(), padding: '4px 10px', fontSize: '11px' }}>
-            <RefreshCw size={11} /> Atualizar
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {contasErro && <span style={{ fontSize: '11px', color: 'var(--status-error)' }}>Erro ao buscar</span>}
+            {!carregando.contas && contasAgoLabel && (
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Atualizado {contasAgoLabel}</span>
+            )}
+            <button onClick={buscarContas} style={{ ...sBtn(), padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', opacity: carregando.contas ? 0.6 : 1 }}>
+              <RefreshCw size={12} style={carregando.contas ? { animation: 'spin .7s linear infinite' } : undefined} />
+              {carregando.contas ? 'Atualizando...' : 'Atualizar'}
+            </button>
+          </div>
         </div>
-        {contas.length === 0 ? (
+        {carregando.contas ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+            {[1,2,3].map(i => (
+              <div key={i} style={{ height: 80, borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--bg-border)', animation: 'flashIn 1s ease infinite alternate' }} />
+            ))}
+          </div>
+        ) : contas.length === 0 ? (
           <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nenhuma conta conectada. Vá em Configurações → adicione uma BM.</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
@@ -1084,7 +1132,7 @@ export default function BotPage() {
                   const selectedAcc = contas.find(c => c.is_selected)
                   const accountId = selectedAcc?.meta_account_id?.replace('act_', '') ?? ''
                   const adsManagerUrl = accountId && log.campaign_id
-                    ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${accountId}&selected_campaign_ids=${log.campaign_id}`
+                    ? `https://adsmanager.facebook.com/adsmanager/manage/adsets?act=${accountId}&campaign_id=${log.campaign_id}`
                     : null
                   return (
                   <tr key={log.id}

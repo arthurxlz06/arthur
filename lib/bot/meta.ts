@@ -239,11 +239,11 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
 
   const campMap = new Map((rawCamps as RC[]).map(c => [c.id, c]))
 
-  // Exclui apenas campanhas deletadas/arquivadas; mantém ACTIVE, PAUSED, CAMPAIGN_PAUSED, etc.
-  const EXCLUIR = new Set(['DELETED', 'ARCHIVED'])
+  // Só exibe campanhas que estão em estado "ativo" para o bot — exclui pausadas, deletadas, arquivadas
+  const STATUS_ATIVO = new Set(['ACTIVE', 'IN_PROCESS', 'WITH_ISSUES', 'PENDING_REVIEW'])
   return (rawIns as RI[]).filter(ins => {
     const camp = campMap.get(ins.campaign_id)
-    return camp && !EXCLUIR.has(camp.effective_status)
+    return camp && STATUS_ATIVO.has(camp.effective_status)
   }).map(ins => {
     const camp = campMap.get(ins.campaign_id)
     const daily_budget = parseInt(camp?.daily_budget ?? '0', 10)
@@ -340,7 +340,7 @@ export async function getAdSets(since: string, until: string): Promise<AdSetData
       cost_per_purchase: parseCostPerAction(ins.cost_per_action_type, 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'),
       cost_per_link_click: parseCostPerAction(ins.cost_per_action_type, 'link_click'),
       daily_budget, budget_reais: daily_budget / 100,
-      effective_status: s?.effective_status ?? 'ACTIVE',
+      effective_status: s?.effective_status ?? 'PAUSED',
     }
   })
 }
@@ -381,7 +381,7 @@ export async function getAds(since: string, until: string): Promise<AdData[]> {
       reach: parseInt(ins.reach || '0', 10), frequency: parseFloat(ins.frequency || '0'),
       cost_per_purchase: parseCostPerAction(ins.cost_per_action_type, 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'),
       cost_per_link_click: parseCostPerAction(ins.cost_per_action_type, 'link_click'),
-      effective_status: a?.effective_status ?? 'ACTIVE',
+      effective_status: a?.effective_status ?? 'PAUSED',
     }
   })
 }

@@ -4,26 +4,14 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
-  LayoutDashboard,
-  FolderOpen,
-  Radio,
-  History,
-  Settings,
   SlidersHorizontal,
   Menu,
   X,
   Zap,
-  PlaySquare,
   Bot,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/accounts', icon: Settings, label: 'Contas' },
-  { href: '/library', icon: FolderOpen, label: 'Biblioteca' },
-  { href: '/publish', icon: Radio, label: 'Publicar' },
-  { href: '/history', icon: History, label: 'Histórico' },
-  { href: '/creatives', icon: PlaySquare, label: 'Criativos' },
   { href: '/bot', icon: Bot, label: 'Bot de Escala' },
   { href: '/settings', icon: SlidersHorizontal, label: 'Configurações' },
 ]
