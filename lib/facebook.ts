@@ -82,13 +82,11 @@ export async function getActiveCampaignCount(accountId: string, accessToken: str
     const id = accountId.startsWith('act_') ? accountId : `act_${accountId}`
     const today = new Date().toISOString().split('T')[0]
 
-    // Conta campanhas que realmente gastaram dinheiro hoje (entregando ativamente)
-    // Isso exclui campanhas "ligadas" mas sem entrega, que effective_status=ACTIVE não filtra
+    // Insights só retorna campanhas com atividade — filtramos spend > 0 no cliente
     const params = new URLSearchParams({
       level: 'campaign',
-      fields: 'campaign_id',
+      fields: 'campaign_id,spend',
       time_range: JSON.stringify({ since: today, until: today }),
-      filtering: JSON.stringify([{ field: 'spend', operator: 'GREATER_THAN', value: '0' }]),
       limit: '500',
       access_token: accessToken,
     })
@@ -98,10 +96,10 @@ export async function getActiveCampaignCount(accountId: string, accessToken: str
     do {
       if (after) params.set('after', after)
       const data = await metaFetch<{
-        data: { campaign_id: string }[]
+        data: { campaign_id: string; spend: string }[]
         paging?: { cursors?: { after?: string }; next?: string }
       }>(`${BASE_URL}/${id}/insights?${params}`)
-      count += data.data?.length ?? 0
+      count += (data.data ?? []).filter(d => parseFloat(d.spend || '0') > 0).length
       after = data.paging?.cursors?.after
       if (!after && data.paging?.next) {
         try { after = new URL(data.paging.next).searchParams.get('after') ?? undefined } catch { /* ignore */ }

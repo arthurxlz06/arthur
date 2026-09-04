@@ -41,12 +41,13 @@ export async function GET() {
   // Conta campanhas ativas para TODAS as contas em PARALELO com timeout de 10s por conta
   const results = await Promise.all(allDbAccounts.map(async (acc) => {
     const liveId = acc.meta_account_id.startsWith('act_') ? acc.meta_account_id : `act_${acc.meta_account_id}`
-    let count = acc.active_campaign_count ?? 0 // fallback para valor cacheado no DB
+    // Ignora cache zerado — força busca fresca para não manter 0 incorreto no DB
+    let count = (acc.active_campaign_count ?? 0) > 0 ? acc.active_campaign_count! : 0
 
     if (token) {
       const fresh = await withTimeout(
         getActiveCampaignCount(liveId, token),
-        10_000,
+        15_000,
         null // null = timeout, mantém valor cacheado
       ).catch(() => null)
 
