@@ -222,10 +222,9 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
   }
 
   const [rawCamps, rawIns] = await Promise.all([
-    // Sem filtro de status — buscamos TODOS os estados para ter o effective_status correto.
-    // Filtrar aqui por ["ACTIVE","PAUSED"] exclui CAMPAIGN_PAUSED, WITH_ISSUES, etc. e
-    // causa o bug onde campMap.get() retorna undefined e o fallback 'ACTIVE' é usado.
+    // Filtra só campanhas em estado ativo — evita paginar centenas de campanhas pausadas
     paginate(`${accountId}/campaigns`, {
+      effective_status: '["ACTIVE","IN_PROCESS","WITH_ISSUES","PENDING_REVIEW"]',
       fields: 'id,name,daily_budget,effective_status',
       limit: '200',
     }),
@@ -237,14 +236,10 @@ export async function getCampaigns(since: string, until: string): Promise<Campai
     }),
   ])
 
+  // campMap só tem campanhas ativas — insights de campanhas pausadas são automaticamente excluídos
   const campMap = new Map((rawCamps as RC[]).map(c => [c.id, c]))
 
-  // Só exibe campanhas que estão em estado "ativo" para o bot — exclui pausadas, deletadas, arquivadas
-  const STATUS_ATIVO = new Set(['ACTIVE', 'IN_PROCESS', 'WITH_ISSUES', 'PENDING_REVIEW'])
-  return (rawIns as RI[]).filter(ins => {
-    const camp = campMap.get(ins.campaign_id)
-    return camp && STATUS_ATIVO.has(camp.effective_status)
-  }).map(ins => {
+  return (rawIns as RI[]).filter(ins => campMap.has(ins.campaign_id)).map(ins => {
     const camp = campMap.get(ins.campaign_id)
     const daily_budget = parseInt(camp?.daily_budget ?? '0', 10)
     return {

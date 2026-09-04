@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import { getCampaigns, toTargetData } from '@/lib/bot/meta'
 import { getRules, getCooldownState } from '@/lib/bot/db'
 import { evaluate } from '@/lib/bot/engine'
