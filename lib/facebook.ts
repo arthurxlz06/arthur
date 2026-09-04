@@ -80,31 +80,26 @@ export async function getPersonalAdAccounts(accessToken: string): Promise<MetaAd
 export async function getActiveCampaignCount(accountId: string, accessToken: string): Promise<number> {
   try {
     const id = accountId.startsWith('act_') ? accountId : `act_${accountId}`
-    const today = new Date().toISOString().split('T')[0]
+    const version = process.env.META_API_VERSION || 'v21.0'
 
-    // Insights só retorna campanhas com atividade — filtramos spend > 0 no cliente
-    const params = new URLSearchParams({
-      level: 'campaign',
-      fields: 'campaign_id,spend',
-      time_range: JSON.stringify({ since: today, until: today }),
-      limit: '500',
-      access_token: accessToken,
-    })
+    // Usa o parâmetro filtering (forma correta de filtrar status na API do Meta)
+    const filtering = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]))
+    const baseUrl = `https://graph.facebook.com/${version}/${id}/campaigns?filtering=${filtering}&fields=id&limit=500&access_token=${encodeURIComponent(accessToken)}`
 
     let count = 0
-    let after: string | undefined
-    do {
-      if (after) params.set('after', after)
-      const data = await metaFetch<{
-        data: { campaign_id: string; spend: string }[]
-        paging?: { cursors?: { after?: string }; next?: string }
-      }>(`${BASE_URL}/${id}/insights?${params}`)
-      count += (data.data ?? []).filter(d => parseFloat(d.spend || '0') > 0).length
-      after = data.paging?.cursors?.after
-      if (!after && data.paging?.next) {
-        try { after = new URL(data.paging.next).searchParams.get('after') ?? undefined } catch { /* ignore */ }
+    let nextUrl: string | null = baseUrl
+
+    while (nextUrl) {
+      const res = await fetch(nextUrl, { cache: 'no-store' })
+      const data = await res.json() as {
+        data?: { id: string }[]
+        paging?: { next?: string }
+        error?: { message: string }
       }
-    } while (after)
+      if (data.error) throw new Error(data.error.message)
+      count += data.data?.length ?? 0
+      nextUrl = data.paging?.next ?? null
+    }
 
     return count
   } catch {
